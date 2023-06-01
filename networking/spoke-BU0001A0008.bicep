@@ -2,10 +2,6 @@ targetScope = 'resourceGroup'
 
 /*** PARAMETERS ***/
 
-@description('The regional hub network to which this regional spoke will peer to.')
-@minLength(79)
-param hubVnetResourceId string
-
 @allowed([
   'australiaeast'
   'canadacentral'
@@ -30,46 +26,45 @@ param location string
 var orgAppId = 'BU0001A0008'
 var clusterVNetName = 'vnet-spoke-${orgAppId}-00'
 
-/*** EXISTING HUB RESOURCES ***/
-
-// This is 'rg-enterprise-networking-hubs' if using the default values in the walkthrough
-resource hubResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
-  scope: subscription()
-  name: '${split(hubVnetResourceId,'/')[4]}'
-}
-
-resource hubVirtualNetwork 'Microsoft.Network/virtualNetworks@2021-05-01' existing = {
-  scope: hubResourceGroup
-  name: '${last(split(hubVnetResourceId,'/'))}'
-}
-
-// This is the firewall that was deployed in 'hub-default.bicep'
-resource hubFirewall 'Microsoft.Network/azureFirewalls@2021-05-01' existing = {
-  scope: hubResourceGroup
-  name: 'fw-${location}'
-}
-
-// This is the networking log analytics workspace (in the hub)
-resource laHub 'Microsoft.OperationalInsights/workspaces@2021-06-01' existing = {
-  scope: hubResourceGroup
-  name: 'la-hub-${location}'
-}
-
 /*** RESOURCES ***/
 
-// Next hop to the regional hub's Azure Firewall
-resource routeNextHopToFirewall 'Microsoft.Network/routeTables@2021-05-01' = {
-  name: 'route-to-${location}-hub-fw'
+// This Log Analytics workspace stores logs from the regional spokes network.
+resource la 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+  name: 'la-${location}'
   location: location
   properties: {
-    routes: [
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+    forceCmkForQuery: false
+    features: {
+      disableLocalAuth: true
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
+    workspaceCapping: {
+      dailyQuotaGb: -1
+    }
+  }
+}
+
+resource la_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'default'
+  scope: la
+  properties: {
+    workspaceId: la.id
+    logs: [
       {
-        name: 'r-nexthop-to-fw'
-        properties: {
-          nextHopType: 'VirtualAppliance'
-          addressPrefix: '0.0.0.0/0'
-          nextHopIpAddress: hubFirewall.properties.ipConfigurations[0].properties.privateIPAddress
-        }
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
       }
     ]
   }
@@ -289,7 +284,7 @@ resource nsgVmssFrontendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosti
   scope: nsgVmssFrontendSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -303,7 +298,7 @@ resource nsgVmssBackendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnostic
   scope: nsgVmssBackendSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -387,7 +382,7 @@ resource nsgInternalLoadBalancerSubnet_diagnosticsSettings 'Microsoft.Insights/d
   scope: nsgInternalLoadBalancerSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -481,7 +476,7 @@ resource nsgAppGwSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettin
   scope: nsgAppGwSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -544,7 +539,7 @@ resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/d
   scope: nsgPrivateLinkEndpointsSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -571,9 +566,6 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-frontend'
         properties: {
           addressPrefix: '10.240.0.0/24'
-          routeTable: {
-            id: routeNextHopToFirewall.id
-          }
           networkSecurityGroup: {
             id: nsgVmssFrontendSubnet.id
           }
@@ -585,9 +577,6 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-backend'
         properties: {
           addressPrefix: '10.240.1.0/24'
-          routeTable: {
-            id: routeNextHopToFirewall.id
-          }
           networkSecurityGroup: {
             id: nsgVmssBackendSubnet.id
           }
@@ -599,9 +588,6 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-ilbs'
         properties: {
           addressPrefix: '10.240.4.0/28'
-          routeTable: {
-            id: routeNextHopToFirewall.id
-          }
           networkSecurityGroup: {
             id: nsgInternalLoadBalancerSubnet.id
           }
@@ -643,36 +629,11 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
   }
 }
 
-// Peer to regional hub
-module peeringSpokeToHub 'virtualNetworkPeering.bicep' = {
-  name: take('Peer-${vnetSpoke.name}To${hubVirtualNetwork.name}', 64)
-  params: {
-    remoteVirtualNetworkId: hubVirtualNetwork.id
-    localVnetName: vnetSpoke.name
-  }
-}
-
-// Connect regional hub back to this spoke, this could also be handled via the
-// hub template or via Azure Policy or Portal. How virtual networks are peered
-// may vary from organization to organization. This example simply does it in
-// the most direct way.
-module peeringHubToSpoke 'virtualNetworkPeering.bicep' = {
-  name: take('Peer-${hubVirtualNetwork.name}To${vnetSpoke.name}', 64)
-  dependsOn: [
-    peeringSpokeToHub
-  ]
-  scope: hubResourceGroup
-  params: {
-    remoteVirtualNetworkId: vnetSpoke.id
-    localVnetName: hubVirtualNetwork.name
-  }
-}
-
 resource vnetSpoke_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: vnetSpoke
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     metrics: [
       {
         category: 'AllMetrics'
@@ -702,7 +663,7 @@ resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSe
   name: 'default'
   scope: pipPrimaryWorkloadIp
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'audit'

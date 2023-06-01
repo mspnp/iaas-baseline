@@ -1,6 +1,6 @@
 # Deploy shared services
 
-Now that the [hub-spoke network is provisioned](./04-networking.md), the next step in the [IaaS baseline reference implementation](./) is preparing what your spoke should be bootstrapped with before receiving the compute resources.
+Now that the [spoke network is provisioned](./04-networking.md), the next step in the [IaaS baseline reference implementation](./) is preparing what your spoke should be bootstrapped with before receiving the compute resources.
 
 ## Expected results
 
