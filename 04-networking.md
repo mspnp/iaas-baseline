@@ -57,4 +57,4 @@ The following two resource groups will be created and populated with networking 
 
 ### Next step
 
-:arrow_forward: [Prep for compute bootstrapping](./05-bootstrap-prep.md)
+:arrow_forward: [Deploy the compute infrastructure](./06-compute-infra.md)

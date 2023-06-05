@@ -125,8 +125,8 @@ resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' exi
 
 // Log Analytics Workspace
 resource la 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
-  name: 'la-${vmssName}'
+  scope: targetResourceGroup
+  name: 'la-${location}'
 }
 
 // Default ASG on the vmss frontend. Feel free to constrict further.
