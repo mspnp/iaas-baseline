@@ -2,10 +2,6 @@ targetScope = 'resourceGroup'
 
 /*** PARAMETERS ***/
 
-@description('The regional hub network to which this regional spoke will peer to.')
-@minLength(79)
-param hubVnetResourceId string
-
 @allowed([
   'australiaeast'
   'canadacentral'
@@ -30,46 +26,229 @@ param location string
 var orgAppId = 'BU0001A0008'
 var clusterVNetName = 'vnet-spoke-${orgAppId}-00'
 
-/*** EXISTING HUB RESOURCES ***/
-
-// This is 'rg-enterprise-networking-hubs' if using the default values in the walkthrough
-resource hubResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
-  scope: subscription()
-  name: '${split(hubVnetResourceId,'/')[4]}'
-}
-
-resource hubVirtualNetwork 'Microsoft.Network/virtualNetworks@2021-05-01' existing = {
-  scope: hubResourceGroup
-  name: '${last(split(hubVnetResourceId,'/'))}'
-}
-
-// This is the firewall that was deployed in 'hub-default.bicep'
-resource hubFirewall 'Microsoft.Network/azureFirewalls@2021-05-01' existing = {
-  scope: hubResourceGroup
-  name: 'fw-${location}'
-}
-
-// This is the networking log analytics workspace (in the hub)
-resource laHub 'Microsoft.OperationalInsights/workspaces@2021-06-01' existing = {
-  scope: hubResourceGroup
-  name: 'la-hub-${location}'
-}
-
 /*** RESOURCES ***/
 
-// Next hop to the regional hub's Azure Firewall
-resource routeNextHopToFirewall 'Microsoft.Network/routeTables@2021-05-01' = {
-  name: 'route-to-${location}-hub-fw'
+// This Log Analytics workspace stores logs from the regional spokes network, and bastion.
+resource la 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+  name: 'la-${location}'
   location: location
   properties: {
-    routes: [
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+    forceCmkForQuery: false
+    features: {
+      disableLocalAuth: true
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
+    workspaceCapping: {
+      dailyQuotaGb: -1
+    }
+  }
+}
+
+resource la_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'default'
+  scope: la
+  properties: {
+    workspaceId: la.id
+    logs: [
       {
-        name: 'r-nexthop-to-fw'
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+// NSG around the Azure Bastion Subnet.
+resource nsgBastionSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${location}-bastion'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowWebExperienceInbound'
         properties: {
-          nextHopType: 'VirtualAppliance'
-          addressPrefix: '0.0.0.0/0'
-          nextHopIpAddress: hubFirewall.properties.ipConfigurations[0].properties.privateIPAddress
+          description: 'Allow our users in. Update this to be as restrictive as possible.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'Internet'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
         }
+      }
+      {
+        name: 'AllowControlPlaneInbound'
+        properties: {
+          description: 'Service Requirement. Allow control plane access. Regional Tag not yet supported.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'GatewayManager'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 110
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowHealthProbesInbound'
+        properties: {
+          description: 'Service Requirement. Allow Health Probes.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 120
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowBastionHostToHostInbound'
+        properties: {
+          description: 'Service Requirement. Allow Required Host to Host Communication.'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '8080'
+            '5701'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 130
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllInbound'
+        properties: {
+          description: 'No further inbound traffic allowed.'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowSshToVnetOutbound'
+        properties: {
+          description: 'Allow SSH out to the virtual network'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '22'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowRdpToVnetOutbound'
+        properties: {
+          description: 'Allow RDP out to the virtual network'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '3389'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 110
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowControlPlaneOutbound'
+        properties: {
+          description: 'Required for control plane outbound. Regional prefix not yet supported'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '443'
+          destinationAddressPrefix: 'AzureCloud'
+          access: 'Allow'
+          priority: 120
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowBastionHostToHostOutbound'
+        properties: {
+          description: 'Service Requirement. Allow Required Host to Host Communication.'
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationPortRanges: [
+            '8080'
+            '5701'
+          ]
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 130
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowBastionCertificateValidationOutbound'
+        properties: {
+          description: 'Service Requirement. Allow Required Session and Certificate Validation.'
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '80'
+          destinationAddressPrefix: 'Internet'
+          access: 'Allow'
+          priority: 140
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'DenyAllOutbound'
+        properties: {
+          description: 'No further outbound traffic allowed.'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Outbound'
+        }
+      }
+    ]
+  }
+}
+
+resource nsgBastionSubnet_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: nsgBastionSubnet
+  name: 'default'
+  properties: {
+    workspaceId: la.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
       }
     ]
   }
@@ -131,7 +310,7 @@ resource nsgVmssFrontendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-
           description: 'Allow Azure Azure Bastion in.'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          sourceAddressPrefix: '10.200.0.128/26'
+          sourceAddressPrefix: '10.240.6.0/26'
           destinationPortRange: '22'
           destinationApplicationSecurityGroups: [
             {
@@ -223,7 +402,7 @@ resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-0
           description: 'Allow Azure Azure Bastion in.'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          sourceAddressPrefix: '10.200.0.128/26'
+          sourceAddressPrefix: '10.240.6.0/26'
           destinationPortRange: '22'
           destinationApplicationSecurityGroups: [
             {
@@ -241,7 +420,7 @@ resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-0
           description: 'Allow Azure Azure Bastion in.'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          sourceAddressPrefix: '10.200.0.128/26'
+          sourceAddressPrefix: '10.240.6.0/26'
           destinationPortRange: '3389'
           destinationApplicationSecurityGroups: [
             {
@@ -289,7 +468,7 @@ resource nsgVmssFrontendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosti
   scope: nsgVmssFrontendSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -303,7 +482,7 @@ resource nsgVmssBackendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnostic
   scope: nsgVmssBackendSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -387,7 +566,7 @@ resource nsgInternalLoadBalancerSubnet_diagnosticsSettings 'Microsoft.Insights/d
   scope: nsgInternalLoadBalancerSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -481,7 +660,7 @@ resource nsgAppGwSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettin
   scope: nsgAppGwSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -544,7 +723,7 @@ resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/d
   scope: nsgPrivateLinkEndpointsSubnet
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -571,9 +750,6 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-frontend'
         properties: {
           addressPrefix: '10.240.0.0/24'
-          routeTable: {
-            id: routeNextHopToFirewall.id
-          }
           networkSecurityGroup: {
             id: nsgVmssFrontendSubnet.id
           }
@@ -585,9 +761,6 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-backend'
         properties: {
           addressPrefix: '10.240.1.0/24'
-          routeTable: {
-            id: routeNextHopToFirewall.id
-          }
           networkSecurityGroup: {
             id: nsgVmssBackendSubnet.id
           }
@@ -599,9 +772,6 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-ilbs'
         properties: {
           addressPrefix: '10.240.4.0/28'
-          routeTable: {
-            id: routeNextHopToFirewall.id
-          }
           networkSecurityGroup: {
             id: nsgInternalLoadBalancerSubnet.id
           }
@@ -631,6 +801,15 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
           privateLinkServiceNetworkPolicies: 'Disabled'
         }
       }
+      {
+        name: 'AzureBastionSubnet'
+        properties: {
+          addressPrefix: '10.240.6.0/26'
+          networkSecurityGroup: {
+            id: nsgBastionSubnet.id
+          }
+        }
+      }
     ]
   }
 
@@ -641,30 +820,84 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
   resource snetBackend 'subnets' existing = {
     name: 'snet-backend'
   }
-}
 
-// Peer to regional hub
-module peeringSpokeToHub 'virtualNetworkPeering.bicep' = {
-  name: take('Peer-${vnetSpoke.name}To${hubVirtualNetwork.name}', 64)
-  params: {
-    remoteVirtualNetworkId: hubVirtualNetwork.id
-    localVnetName: vnetSpoke.name
+  resource azureBastionSubnet 'subnets' existing = {
+    name: 'AzureBastionSubnet'
   }
 }
 
-// Connect regional hub back to this spoke, this could also be handled via the
-// hub template or via Azure Policy or Portal. How virtual networks are peered
-// may vary from organization to organization. This example simply does it in
-// the most direct way.
-module peeringHubToSpoke 'virtualNetworkPeering.bicep' = {
-  name: take('Peer-${hubVirtualNetwork.name}To${vnetSpoke.name}', 64)
-  dependsOn: [
-    peeringSpokeToHub
-  ]
-  scope: hubResourceGroup
-  params: {
-    remoteVirtualNetworkId: vnetSpoke.id
-    localVnetName: hubVirtualNetwork.name
+@description('The public IP for the regional hub\'s Azure Bastion service.')
+resource pipAzureBastion 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+  name: 'pip-ab-${location}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  zones: pickZones('Microsoft.Network', 'publicIPAddresses', location, 3)
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    idleTimeoutInMinutes: 4
+    publicIPAddressVersion: 'IPv4'
+  }
+}
+
+resource pipAzureBastion_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
+  name: 'default'
+  scope: pipAzureBastion
+  properties: {
+    workspaceId: la.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+@description('This regional hub\'s Azure Bastion service.')
+resource azureBastion 'Microsoft.Network/bastionHosts@2021-05-01' = {
+  name: 'ab-${location}'
+  location: location
+  properties: {
+    enableTunneling: true
+    ipConfigurations: [
+      {
+        name: 'hub-subnet'
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: vnetHub::azureBastionSubnet.id
+          }
+          publicIPAddress: {
+            id: pipAzureBastion.id
+          }
+        }
+      }
+    ]
+  }
+  sku: {
+    name: 'Standard'
+  }
+}
+
+resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'default'
+  scope: azureBastion
+  properties: {
+    workspaceId: laHub.id
+    logs: [
+      {
+        category: 'BastionAuditLogs'
+        enabled: true
+      }
+    ]
   }
 }
 
@@ -672,7 +905,7 @@ resource vnetSpoke_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@202
   scope: vnetSpoke
   name: 'default'
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     metrics: [
       {
         category: 'AllMetrics'
@@ -702,7 +935,7 @@ resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSe
   name: 'default'
   scope: pipPrimaryWorkloadIp
   properties: {
-    workspaceId: laHub.id
+    workspaceId: la.id
     logs: [
       {
         categoryGroup: 'audit'
