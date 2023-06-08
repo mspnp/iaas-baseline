@@ -58,8 +58,8 @@ var agwName = 'agw-${vmssName}'
 var lbName = 'ilb-${vmssName}'
 
 var ingressDomainName = 'iaas-ingress.${domainName}'
-var vmssBackendSubdomain = 'bu0001a0008-00-backend'
-var vmssFrontendSubdomain = 'bu0001a0008-00-frontend'
+var vmssBackendSubdomain = 'backend'
+var vmssFrontendSubdomain = 'frontend'
 var vmssFrontendDomainName = '${vmssFrontendSubdomain}.${ingressDomainName}'
 
 var defaultAdminUserName = uniqueString(vmssName, resourceGroup().id)
@@ -254,7 +254,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-spoke-BU0001A0008-00-frontend'
+            name: 'nic-vnet-spoke-frontend'
             properties: {
               primary: true
               enableIPForwarding: false
@@ -489,7 +489,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-spoke-BU0001A0008-00-backend'
+            name: 'nic-vnet-spoke-backend'
             properties: {
               deleteOption: 'Delete'
               primary: true
@@ -881,7 +881,7 @@ resource pdzVmss 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: ingressDomainName
   location: 'global'
 
-  resource vmssBackendDomainName_bu0001a0008_00 'A' = {
+  resource vmssBackendDomainName_backend 'A' = {
     name: vmssBackendSubdomain
     properties: {
       ttl: 3600
@@ -951,7 +951,7 @@ resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
         name: 'agw-frontend-ip-configuration'
         properties: {
           publicIPAddress: {
-            id: resourceId(subscription().subscriptionId, targetResourceGroup.name, 'Microsoft.Network/publicIpAddresses', 'pip-BU0001A0008-00')
+            id: resourceId(subscription().subscriptionId, targetResourceGroup.name, 'Microsoft.Network/publicIpAddresses', 'pip-gw')
           }
         }
       }

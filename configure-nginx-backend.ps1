@@ -75,7 +75,7 @@ http {
 
     server {
         listen 443 ssl;
-        server_name bu0001a0008-00-backend.iaas-ingress.contoso.com;
+        server_name backend.iaas-ingress.contoso.com;
         ssl_certificate w:/nginx/ssl/nginx-ingress-internal-iaas-ingress-tls.crt;
         ssl_certificate_key w:/nginx/ssl/nginx-ingress-internal-iaas-ingress-tls.key;
         ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
@@ -83,7 +83,7 @@ http {
         root w:/nginx/html;
 
         location / {
-            access_log w:/nginx/logs/bu0001a0008.log combined buffer=10K flush=1m;
+            access_log w:/nginx/logs/backend.log combined buffer=10K flush=1m;
             index index.html;
             sub_filter '[backend]' '`$hostname';
             sub_filter_once off;
@@ -104,29 +104,29 @@ start nginx
 # Task Scheduler to rotate and process workload total number of requests.
 
 # Initialize processed request count data file
-"0" | Out-File -FilePath w:/nginx/data/bu0001a0008.data -Encoding ascii
+"0" | Out-File -FilePath w:/nginx/data/backend.data -Encoding ascii
 
 # Create rotation processing requests script
 @"
 # Renaming
-Move-Item -Path w:/nginx/logs/bu0001a0008.log -Destination w:/nginx/logs/bu0001a0008.log.rot -Force
+Move-Item -Path w:/nginx/logs/backend.log -Destination w:/nginx/logs/backend.log.rot -Force
 
 # Send USR1
 cd w:/nginx
 ./nginx.exe -s reopen
 
 # Process rotated log
-`$lastProcessedRequestCount = (Get-Content w:/nginx/logs/bu0001a0008.log.rot | Measure-Object -Line).Lines
+`$lastProcessedRequestCount = (Get-Content w:/nginx/logs/backend.log.rot | Measure-Object -Line).Lines
 
 # Get current number of processed requests
-`$currentProcessedRequestCount = (Get-Content w:/nginx/data/bu0001a0008.data)
+`$currentProcessedRequestCount = (Get-Content w:/nginx/data/backend.data)
 
 # Write total number of processed requests
 `$totalProcessedRequestCount = (`$lastProcessedRequestCount + `$currentProcessedRequestCount)
-`$totalProcessedRequestCount | Out-File -FilePath w:/nginx/data/bu0001a0008.data -Force -Encoding ascii
+`$totalProcessedRequestCount | Out-File -FilePath w:/nginx/data/backend.data -Force -Encoding ascii
 
 # Get last write time
-`$lastWriteTime = ((Get-Item w:/nginx/data/bu0001a0008.data).LastWriteTime).GetDateTimeFormats('u')
+`$lastWriteTime = ((Get-Item w:/nginx/data/backend.data).LastWriteTime).GetDateTimeFormats('u')
 
 # Update workload content with total processed requests
 `$updatedCount = [string]::Format('<h2>Welcome to the Contoso WebApp! Your request has been load balanced through [frontend] and [backend] {{Total Processed Requests: {0}, Last Update Time: {1}}}.</h2>', `$totalProcessedRequestCount, [string]`$lastWriteTime)

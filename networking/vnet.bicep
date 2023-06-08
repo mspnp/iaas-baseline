@@ -23,8 +23,7 @@ targetScope = 'resourceGroup'
 param location string
 
 // A designator that represents a business unit id and application id
-var orgAppId = 'BU0001A0008'
-var clusterVNetName = 'vnet-spoke-${orgAppId}-00'
+var clusterVNetName = 'vnet'
 
 /*** RESOURCES ***/
 
@@ -918,7 +917,7 @@ resource vnetSpoke_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@202
 // Used as primary public entry point for the workload. Expected to be assigned to an Azure Application Gateway.
 // This is a public facing IP, and would be best behind a DDoS Policy (not deployed simply for cost considerations)
 resource pipPrimaryWorkloadIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
-  name: 'pip-${orgAppId}-00'
+  name: 'pip-gw'
   location: location
   sku: {
     name: 'Standard'
