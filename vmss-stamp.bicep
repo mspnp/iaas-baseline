@@ -124,9 +124,9 @@ resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' exi
 }
 
 // Log Analytics Workspace
-resource la 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
-  name: 'la-${vmssName}'
+resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  scope: targetResourceGroup
+  name: 'log-${location}'
 }
 
 // Default ASG on the vmss frontend. Feel free to constrict further.
@@ -652,13 +652,13 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
 }
 
 resource omsVmssInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
-  name: 'VMInsights(${la.name})'
+  name: 'VMInsights(${logAnaliticsWorkspace.name})'
   location: location
   properties: {
-    workspaceResourceId: la.id
+    workspaceResourceId: logAnaliticsWorkspace.id
   }
   plan: {
-    name: 'VMInsights(${la.name})'
+    name: 'VMInsights(${logAnaliticsWorkspace.name})'
     product: 'OMSGallery/VMInsights'
     promotionCode: ''
     publisher: 'Microsoft'
@@ -720,7 +720,7 @@ resource kv_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01
   scope: kv
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         category: 'AuditEvent'

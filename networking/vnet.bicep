@@ -28,8 +28,8 @@ var clusterVNetName = 'vnet'
 /*** RESOURCES ***/
 
 // This Log Analytics workspace stores logs from the regional spokes network, and bastion.
-resource la 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
-  name: 'la-${location}'
+resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+  name: 'log-${location}'
   location: location
   properties: {
     sku: {
@@ -49,11 +49,11 @@ resource la 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
   }
 }
 
-resource la_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource logAnaliticsWorkspace_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'default'
-  scope: la
+  scope:logAnaliticsWorkspace
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
@@ -243,7 +243,7 @@ resource nsgBastionSubnet_diagnosticSettings 'Microsoft.Insights/diagnosticSetti
   scope: nsgBastionSubnet
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -467,7 +467,7 @@ resource nsgVmssFrontendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosti
   scope: nsgVmssFrontendSubnet
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -481,7 +481,7 @@ resource nsgVmssBackendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnostic
   scope: nsgVmssBackendSubnet
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -565,7 +565,7 @@ resource nsgInternalLoadBalancerSubnet_diagnosticsSettings 'Microsoft.Insights/d
   scope: nsgInternalLoadBalancerSubnet
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -659,7 +659,7 @@ resource nsgAppGwSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettin
   scope: nsgAppGwSubnet
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -722,7 +722,7 @@ resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/d
   scope: nsgPrivateLinkEndpointsSubnet
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -844,7 +844,7 @@ resource pipAzureBastion_diagnosticSetting 'Microsoft.Insights/diagnosticSetting
   name: 'default'
   scope: pipAzureBastion
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
@@ -904,7 +904,7 @@ resource vnetSpoke_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@202
   scope: vnetSpoke
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     metrics: [
       {
         category: 'AllMetrics'
@@ -934,7 +934,7 @@ resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSe
   name: 'default'
   scope: pipPrimaryWorkloadIp
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
