@@ -741,7 +741,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
   properties: {
     addressSpace: {
       addressPrefixes: [
-        '10.240.0.0/16'
+        '10.240.0.0/21'
       ]
     }
     subnets: [
