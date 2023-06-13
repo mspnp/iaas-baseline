@@ -872,7 +872,7 @@ resource azureBastion 'Microsoft.Network/bastionHosts@2021-05-01' = {
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: vnetHub::azureBastionSubnet.id
+            id: vnet::azureBastionSubnet.id
           }
           publicIPAddress: {
             id: pipAzureBastion.id
