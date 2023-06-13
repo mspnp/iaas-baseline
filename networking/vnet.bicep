@@ -735,7 +735,7 @@ resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/d
 // The spoke virtual network.
 // 65,536 (-reserved) IPs available to the workload, split across subnets four subnets for Compute,
 // one for App Gateway and one for Private Link endpoints.
-resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
+resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
   name: clusterVNetName
   location: location
   properties: {
@@ -900,8 +900,8 @@ resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@
   }
 }
 
-resource vnetSpoke_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: vnetSpoke
+resource vnet_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vnet
   name: 'default'
   properties: {
     workspaceId: logAnaliticsWorkspace.id
@@ -952,9 +952,9 @@ resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSe
 
 /*** OUTPUTS ***/
 
-output spokeVnetResourceId string = vnetSpoke.id
+output spokeVnetResourceId string = vnet.id
 output vmssSubnetResourceIds array = [
-  vnetSpoke::snetFrontend.id
-  vnetSpoke::snetBackend.id
+  vnet::snetFrontend.id
+  vnet::snetBackend.id
 ]
 output appGwPublicIpAddress string = pipPrimaryWorkloadIp.properties.ipAddress
