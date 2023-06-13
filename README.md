@@ -38,8 +38,7 @@ Finally, this implementation uses [Nginx](https://nginx.org) as an example workl
   - [Autoscale](https://learn.microsoft.com/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-autoscale-overview)
   - [Ephemeral OS disks](https://learn.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks)
   - Managed Identities
-- Azure Virtual Networks (hub-spoke)
-  - Azure Firewall managed egress
+- Azure Virtual Networks
 - Azure Application Gateway (WAF)
 - Internal Load Balancers
 
@@ -265,7 +264,7 @@ The following two resource groups will be created and populated with networking 
    The spoke creation will emit the following:
 
      * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
-     * `spokeVnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
+     * `vnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
      * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-backend ]`
 
 ### 3. Deploying the VMs and Workload
@@ -314,12 +313,21 @@ This is the heart of the guidance in this reference implementation; paired with 
    BACKEND_CLOUDINIT_BASE64=$(base64 backendCloudInit.yml | tr -d '\n')
    ```
 
+1. Get the spoke virtual network resource ID.
+
+   > :book: The app team will be deploying to a spoke virtual network, that was already provisioned by the network team.
+
+   ```bash
+   export RESOURCEID_VNET_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.vnetResourceId.value -o tsv)
+   echo RESOURCEID_VNET_IAAS_BASELINE: $RESOURCEID_VNET_IAAS_BASELINE
+   ```
+
 1. Deploy the compute infrastructure stamp ARM template.
   :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
    # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_SPOKE_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
    ```
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./azuredeploy.parameters.prod.json) file and deployed as above, using `-p "@azuredeploy.parameters.prod.json"` instead of providing the individual key-value pairs.

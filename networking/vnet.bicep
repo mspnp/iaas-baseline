@@ -950,9 +950,45 @@ resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSe
   }
 }
 
+// Used as primary public outbound point for the workload. Expected to be assigned to an Azure Outbound Application Gateway.
+// This is a public IP, and would be best behind a DDoS Policy (not deployed simply for cost considerations)
+resource pipOutboundLoadBalancerIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+  name: 'pip-olb'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  zones: pickZones('Microsoft.Network', 'publicIPAddresses', location, 3)
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    idleTimeoutInMinutes: 4
+    publicIPAddressVersion: 'IPv4'
+  }
+}
+
+resource pipOutboundLoadBalancerIp_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
+  name: 'default'
+  scope: pipOutboundLoadBalancerIp
+  properties: {
+    workspaceId: logAnaliticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
 /*** OUTPUTS ***/
 
-output spokeVnetResourceId string = vnet.id
+output vnetResourceId string = vnet.id
 output vmssSubnetResourceIds array = [
   vnet::snetFrontend.id
   vnet::snetBackend.id
