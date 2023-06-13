@@ -170,20 +170,20 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
 }
 
 // User Managed Identity that App Gateway is assigned. Used for Azure Key Vault Access.
-resource miAppGatewayFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'mi-appgateway'
+resource idAppGatewayFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'id-appgateway'
   location: location
 }
 
 @description('The managed identity for frontend instances')
-resource miVmssFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'mi-vm-frontent'
+resource idVmssFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'id-vm-frontent'
   location: location
 }
 
 @description('The managed identity for backend instances')
-resource miVmssBackend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'mi-vm-backent'
+resource idVmssBackend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'id-vm-backent'
   location: location
 }
 
@@ -195,7 +195,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${miVmssFrontend.id}': {}
+      '${idVmssFrontend.id}': {}
     }
   }
   sku: {
@@ -339,7 +339,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                 authentication: {
                   managedIdentity: {
                     'identifier-name': 'mi_res_id'
-                    'identifier-value': miVmssFrontend.id
+                    'identifier-value': idVmssFrontend.id
                   }
                 }
               }
@@ -400,7 +400,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${miVmssBackend.id}': {}
+      '${idVmssBackend.id}': {}
     }
   }
   sku: {
@@ -586,7 +586,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                 authentication: {
                   managedIdentity: {
                     'identifier-name': 'mi_res_id'
-                    'identifier-value': miVmssBackend.id
+                    'identifier-value': idVmssBackend.id
                   }
                 }
               }
@@ -690,7 +690,7 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
     createMode: 'default'
   }
   dependsOn: [
-    miAppGatewayFrontend
+    idAppGatewayFrontend
   ]
 
   resource kvsAppGwInternalVmssWebserverTls 'secrets' = {
@@ -742,7 +742,7 @@ resource kvMiAppGatewayFrontendSecretsUserRole_roleAssignment 'Microsoft.Authori
   name: guid(resourceGroup().id, 'mi-appgateway', keyVaultSecretsUserRole.id)
   properties: {
     roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: miAppGatewayFrontend.properties.principalId
+    principalId: idAppGatewayFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -753,7 +753,7 @@ resource kvMiAppGatewayFrontendKeyVaultReader_roleAssignment 'Microsoft.Authoriz
   name: guid(resourceGroup().id, 'mi-appgateway', keyVaultReaderRole.id)
   properties: {
     roleDefinitionId: keyVaultReaderRole.id
-    principalId: miAppGatewayFrontend.properties.principalId
+    principalId: idAppGatewayFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -764,7 +764,7 @@ resource kvMiVmssFrontendSecretsUserRole_roleAssignment 'Microsoft.Authorization
   name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultSecretsUserRole.id)
   properties: {
     roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: miVmssFrontend.properties.principalId
+    principalId: idVmssFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -775,7 +775,7 @@ resource kvMiVmssFrontendKeyVaultReader_roleAssignment 'Microsoft.Authorization/
   name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultReaderRole.id)
   properties: {
     roleDefinitionId: keyVaultReaderRole.id
-    principalId: miVmssFrontend.properties.principalId
+    principalId: idVmssFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -786,7 +786,7 @@ resource laMiVmssFrontendContributorUserRole_roleAssignment 'Microsoft.Authoriza
   name: guid(resourceGroup().id, 'mi-vm-frontent', logAnalyticsContributorUserRole.id)
   properties: {
     roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: miVmssFrontend.properties.principalId
+    principalId: idVmssFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -797,7 +797,7 @@ resource kvMiVmssBackendSecretsUserRole_roleAssignment 'Microsoft.Authorization/
   name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultSecretsUserRole.id)
   properties: {
     roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: miVmssBackend.properties.principalId
+    principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -808,7 +808,7 @@ resource kvMiVmssBackendKeyVaultReader_roleAssignment 'Microsoft.Authorization/r
   name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultReaderRole.id)
   properties: {
     roleDefinitionId: keyVaultReaderRole.id
-    principalId: miVmssBackend.properties.principalId
+    principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -819,7 +819,7 @@ resource laMiVmssBackendContributorUserRole_roleAssignment 'Microsoft.Authorizat
   name: guid(resourceGroup().id, 'mi-vm-backent', logAnalyticsContributorUserRole.id)
   properties: {
     roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: miVmssBackend.properties.principalId
+    principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -911,7 +911,7 @@ resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${miAppGatewayFrontend.id}': {}
+      '${idAppGatewayFrontend.id}': {}
     }
   }
   zones: pickZones('Microsoft.Network', 'applicationGateways', location, 3)
