@@ -2,7 +2,7 @@ targetScope = 'resourceGroup'
 
 /*** PARAMETERS ***/
 
-@description('The regional network spoke VNet Resource ID that will host the VM\'s NIC')
+@description('The regional network VNet Resource ID that will host the VM\'s NIC')
 @minLength(79)
 param targetVnetResourceId string
 
@@ -86,38 +86,38 @@ resource logAnalyticsContributorUserRole 'Microsoft.Authorization/roleDefinition
 
 /*** EXISTING RESOURCES ***/
 
-// Spoke resource group
+// resource group
 resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
   scope: subscription()
   name: '${split(targetVnetResourceId,'/')[4]}'
 }
 
-// Spoke virtual network
+// Virtual network
 resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
   scope: targetResourceGroup
   name: '${last(split(targetVnetResourceId,'/'))}'
 
-  // Spoke virtual network's subnet for the nic vms
+  // Virtual network's subnet for the nic vms
   resource snetFrontend 'subnets' existing = {
     name: 'snet-frontend'
   }
 
-  // Spoke virtual network's subnet for the nic vms
+  // Virtual network's subnet for the nic vms
   resource snetBackend 'subnets' existing = {
     name: 'snet-backend'
   }
 
-  // Spoke virtual network's subnet for the nic ilb
+  // Virtual network's subnet for the nic ilb
   resource snetInternalLoadBalancer 'subnets' existing = {
     name: 'snet-ilbs'
   }
 
-  // Spoke virtual network's subnet for all private endpoints
+  // Virtual network's subnet for all private endpoints
   resource snetPrivatelinkendpoints 'subnets' existing = {
     name: 'snet-privatelinkendpoints'
   }
 
-  // Spoke virtual network's subnet for application gateway
+  // Virtual network's subnet for application gateway
   resource snetApplicationGateway 'subnets' existing = {
     name: 'snet-applicationgateway'
   }
@@ -254,7 +254,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-spoke-frontend'
+            name: 'nic-vnet-frontend'
             properties: {
               primary: true
               enableIPForwarding: false
@@ -489,7 +489,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-spoke-backend'
+            name: 'nic-vnet-backend'
             properties: {
               deleteOption: 'Delete'
               primary: true
