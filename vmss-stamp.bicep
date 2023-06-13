@@ -842,8 +842,8 @@ resource pdzKv 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   }
 }
 
-resource peKv 'Microsoft.Network/privateEndpoints@2021-05-01' = {
-  name: 'pe-${kv.name}'
+resource pepKv 'Microsoft.Network/privateEndpoints@2021-05-01' = {
+  name: 'pep-${kv.name}'
   location: location
   properties: {
     subnet: {
@@ -1060,7 +1060,7 @@ resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
     ]
   }
   dependsOn: [
-    peKv
+    pepKv
     kvMiAppGatewayFrontendKeyVaultReader_roleAssignment
     kvMiAppGatewayFrontendSecretsUserRole_roleAssignment
   ]
