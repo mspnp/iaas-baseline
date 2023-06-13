@@ -890,7 +890,7 @@ resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@
   name: 'default'
   scope: azureBastion
   properties: {
-    workspaceId: laHub.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         category: 'BastionAuditLogs'
