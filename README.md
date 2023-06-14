@@ -41,6 +41,7 @@ Finally, this implementation uses [Nginx](https://nginx.org) as an example workl
 - Azure Virtual Networks
 - Azure Application Gateway (WAF)
 - Internal Load Balancers
+- Azure Load Balancer egress
 
 #### In-VM OSS components
 

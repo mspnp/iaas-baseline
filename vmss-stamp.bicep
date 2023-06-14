@@ -55,7 +55,8 @@ param adminPassword string
 var subRgUniqueString = uniqueString('vmss', subscription().subscriptionId, resourceGroup().id)
 var vmssName = 'vmss-${subRgUniqueString}'
 var agwName = 'agw-${vmssName}'
-var lbName = 'ilb-${vmssName}'
+var ilbName = 'ilb-${vmssName}'
+var olbName = 'olb-${vmssName}'
 
 var ingressDomainName = 'iaas-ingress.${domainName}'
 var vmssBackendSubdomain = 'backend'
@@ -270,6 +271,11 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                     subnet: {
                       id: targetVirtualNetwork::snetFrontend.id
                     }
+                    loadBalancerBackendAddressPools: [
+                      {
+                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
+                      }
+                    ]
                     applicationGatewayBackendAddressPools: [
                       {
                         id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'webappBackendPool')
@@ -384,12 +390,12 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
   }
   dependsOn: [
     agw
+    outboundLoadBalancer
     omsVmssInsights
     kvMiVmssFrontendSecretsUserRole_roleAssignment
     kvMiVmssFrontendKeyVaultReader_roleAssignment
+    vmssBackend
   ]
-
-
 }
 
 @description('The compute for backend instances; these machines are assigned to the api app team so they can deploy their workloads.')
@@ -508,7 +514,10 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
                     }
                     loadBalancerBackendAddressPools: [
                       {
-                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', lbName, 'apiBackendPool')
+                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', ilbName, 'apiBackendPool')
+                      }
+                      {
+                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
                       }
                     ]
                     applicationSecurityGroups: [
@@ -646,7 +655,8 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
   }
   dependsOn: [
     omsVmssInsights
-    loadBalancer
+    internalLoadBalancer
+    outboundLoadBalancer
     kvMiVmssBackendSecretsUserRole_roleAssignment
   ]
 }
@@ -1066,8 +1076,8 @@ resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
   ]
 }
 
-resource loadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
-  name: lbName
+resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
+  name: ilbName
   location: location
   sku: {
     name: 'Standard'
@@ -1099,13 +1109,13 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
       {
         properties: {
           frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', lbName, 'ilbBackend')
+            id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', ilbName, 'ilbBackend')
           }
           backendAddressPool: {
-            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', lbName, 'apiBackendPool')
+            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', ilbName, 'apiBackendPool')
           }
           probe: {
-            id: resourceId('Microsoft.Network/loadBalancers/probes', lbName, 'ilbprobe')
+            id: resourceId('Microsoft.Network/loadBalancers/probes', ilbName, 'ilbprobe')
           }
           protocol: 'Tcp'
           frontendPort: 443
@@ -1126,6 +1136,88 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
         name: 'ilbprobe'
       }
     ]
+  }
+  dependsOn: []
+}
+
+var numOutboundLoadBalancerIpAddressesToAssign = 3
+resource pipsOutboundLoadbalanacer 'Microsoft.Network/publicIPAddresses@2021-05-01' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+  name: 'pip-olb-${location}-${padLeft(i, 2, '0')}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  zones: [
+    '1'
+    '2'
+    '3'
+  ]
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    idleTimeoutInMinutes: 4
+    publicIPAddressVersion: 'IPv4'
+  }
+}]
+
+resource pipsOutboundLoadbalanacer_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+  name: 'default'
+  scope: pipsOutboundLoadbalanacer[i]
+  properties: {
+    workspaceId: logAnaliticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}]
+
+resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
+  name: olbName
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    frontendIPConfigurations: [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+        name: pipsOutboundLoadbalanacer[i].name
+        properties: {
+          publicIPAddress: {
+            id: pipsOutboundLoadbalanacer[i].id
+          }
+        }
+    }]
+    backendAddressPools: [
+      {
+        name: 'outboundBackendPool'
+      }
+    ]
+    outboundRules: [
+      {
+        properties: {
+          allocatedOutboundPorts: 32000 // this value must be the total number of available ports divided the amount of vms (e.g. 64000*3/6, where 64000 is the amount of port, 3 the selected number of ips and 6 the numbers of vms)
+          enableTcpReset: true
+          protocol: 'Tcp'
+          idleTimeoutInMinutes: 15
+          frontendIPConfigurations: [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+              id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', olbName, pipsOutboundLoadbalanacer[i].name)
+          }]
+          backendAddressPool: {
+            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
+          }
+        }
+        name: 'olbrule'
+      }
+    ]
+    loadBalancingRules: []
+    probes: []
   }
   dependsOn: []
 }
