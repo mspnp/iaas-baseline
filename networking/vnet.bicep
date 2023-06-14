@@ -22,6 +22,7 @@ targetScope = 'resourceGroup'
 @description('The spokes\'s regional affinity, must be the same as the hub\'s location. All resources tied to this spoke will also be homed in this region. The network team maintains this approved regional list which is a subset of zones with Availability Zone support.')
 param location string
 
+/*** VARIABLES ***/
 // A designator that represents a business unit id and application id
 var clusterVNetName = 'vnet'
 
@@ -784,6 +785,17 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
           addressPrefix: '10.240.4.32/28'
           networkSecurityGroup: {
             id: nsgPrivateLinkEndpointsSubnet.id
+          }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+      }
+      {
+        name: 'snet-deploymentagent'
+        properties: {
+          addressPrefix: '10.240.4.96/28'
+          networkSecurityGroup: {
+            id: nsgDeploymentAgentSubnet.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
