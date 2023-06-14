@@ -393,7 +393,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
 }
 
 @description('The compute for backend instances; these machines are assigned to the api app team so they can deploy their workloads.')
-resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
+resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
   name: 'vmss-backend-00'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
