@@ -1006,3 +1006,4 @@ output vmssSubnetResourceIds array = [
   vnet::snetBackend.id
 ]
 output appGwPublicIpAddress string = pipPrimaryWorkloadIp.properties.ipAddress
+output bastionHostName string = azureBastion.name

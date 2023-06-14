@@ -379,17 +379,17 @@ This is the heart of the guidance in this reference implementation; paired with 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
 
-1. Get the regional hub Azure Bastion name.
+1. Get the Azure Bastion name.
 
    ```bash
-   AB_NAME_HUB=$(az deployment group show -g rg-enterprise-networking-hubs -n hub-regionA --query properties.outputs.abName.value -o tsv)
-   echo AB_NAME_HUB: $AB_NAME_HUB
+   AB_NAME=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.bastionHostName.value -o tsv)
+   echo AB_NAME: $AB_NAME
    ```
 
 1. Remote ssh using Bastion into a frontend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME_HUB -g rg-enterprise-networking-hubs --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
    ```
 
 1. Validate your workload (a Nginx instance) is running in the frontend
@@ -407,7 +407,7 @@ This is the heart of the guidance in this reference implementation; paired with 
 1. Remote to a Windows backend VM using Bastion
 
    ```bash
-   az network bastion rdp -n $AB_NAME_HUB -g rg-enterprise-networking-hubs --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   az network bastion rdp -n $AB_NAME -g rg-iaas --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
    ```
 
    :warning: the bastion rdp command will work from Windows machines. Other platforms might need to remote your VM Windows machines from [Azure portal using Bastion](https://learn.microsoft.com/azure/bastion/bastion-overview)
