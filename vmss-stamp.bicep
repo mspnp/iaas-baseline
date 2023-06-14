@@ -190,7 +190,7 @@ resource idVmssBackend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11
 
 @description('The compute for frontend instances; these machines are assigned to the frontend app team to deploy their workloads')
 resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
-  name: 'vmss-frontend-00'
+  name: 'vmss-frontend'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
   identity: {
@@ -255,7 +255,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-frontend'
+            name: 'nic-frontend'
             properties: {
               primary: true
               enableIPForwarding: false
@@ -400,7 +400,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
 
 @description('The compute for backend instances; these machines are assigned to the api app team so they can deploy their workloads.')
 resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
-  name: 'vmss-backend-00'
+  name: 'vmss-backend'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
   identity: {
@@ -495,7 +495,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-backend'
+            name: 'nic-backend'
             properties: {
               deleteOption: 'Delete'
               primary: true
