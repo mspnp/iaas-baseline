@@ -719,6 +719,55 @@ resource nsgPrivateLinkEndpointsSubnet 'Microsoft.Network/networkSecurityGroups@
   }
 }
 
+// NSG on the Deployment Agent subnet.
+resource nsgDeploymentAgentSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${clusterVNetName}-deploymentagent'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowAll443InFromVnet'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllInbound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllOutbound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Outbound'
+        }
+      }
+    ]
+  }
+}
+
 resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: nsgPrivateLinkEndpointsSubnet
   name: 'default'
@@ -793,7 +842,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
       {
         name: 'snet-deploymentagent'
         properties: {
-          addressPrefix: '10.240.4.96/28'
+          addressPrefix: '10.240.4.64/28'
           networkSecurityGroup: {
             id: nsgDeploymentAgentSubnet.id
           }
