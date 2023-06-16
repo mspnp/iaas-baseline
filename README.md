@@ -259,14 +259,14 @@ The following two resource groups will be created and populated with networking 
 
    ```bash
    # [This takes about four minutes to run.]
-   az deployment group create -g rg-iaas -f networking/vnet.bicep -p location=eastus2
+   az deployment group create -g rg-iaas -n networking -f infras-as-code/bicep/networking.bicep -p location=eastus2
    ```
 
    The spoke creation will emit the following:
 
      * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
-     * `vnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
-     * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-backend ]`
+     * `vnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet`
+     * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet/subnet/snet-backend ]`
 
 ### 3. Deploying the VMs and Workload
 
@@ -319,7 +319,7 @@ This is the heart of the guidance in this reference implementation; paired with 
    > :book: The app team will be deploying to a spoke virtual network, that was already provisioned by the network team.
 
    ```bash
-   export RESOURCEID_VNET_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.vnetResourceId.value -o tsv)
+   export RESOURCEID_VNET_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n networking --query properties.outputs.vnetResourceId.value -o tsv)
    echo RESOURCEID_VNET_IAAS_BASELINE: $RESOURCEID_VNET_IAAS_BASELINE
    ```
 
@@ -328,7 +328,7 @@ This is the heart of the guidance in this reference implementation; paired with 
 
    ```bash
    # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   az deployment group create -g rg-iaas -f infras-as-code/bicep/main.bicep -p targetVnetResourceId=${RESOURCEID_VNET_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
    ```
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./azuredeploy.parameters.prod.json) file and deployed as above, using `-p "@azuredeploy.parameters.prod.json"` instead of providing the individual key-value pairs.
@@ -383,7 +383,7 @@ This is the heart of the guidance in this reference implementation; paired with 
 1. Get the Azure Bastion name.
 
    ```bash
-   AB_NAME=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.bastionHostName.value -o tsv)
+   AB_NAME=$(az deployment group show -g rg-iaas -n networking --query properties.outputs.bastionHostName.value -o tsv)
    echo AB_NAME: $AB_NAME
    ```
 
@@ -440,7 +440,7 @@ This section will help you to validate the workload is exposed correctly and res
 
    ```bash
    # query the Azure Application Gateway Public Ip
-   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.appGwPublicIpAddress.value -o tsv)
+   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n netwoking --query properties.outputs.appGwPublicIpAddress.value -o tsv)
    echo APPGW_PUBLIC_IP: $APPGW_PUBLIC_IP
    ```
 
