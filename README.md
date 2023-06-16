@@ -38,10 +38,10 @@ Finally, this implementation uses [Nginx](https://nginx.org) as an example workl
   - [Autoscale](https://learn.microsoft.com/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-autoscale-overview)
   - [Ephemeral OS disks](https://learn.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks)
   - Managed Identities
-- Azure Virtual Networks (hub-spoke)
-  - Azure Firewall managed egress
+- Azure Virtual Networks
 - Azure Application Gateway (WAF)
 - Internal Load Balancers
+- Azure Load Balancer egress
 
 #### In-VM OSS components
 
@@ -228,7 +228,7 @@ There are considerations that must be addressed before you start deploying your 
 
 ### 2. Build target network
 
-Microsoft recommends VMs be deploy into a carefully planned network; sized appropriately for your needs and with proper network observability. Organizations typically favor a traditional hub-spoke model, which is reflected in this implementation. While this is a standard hub-spoke model, there are fundamental sizing and portioning considerations included that should be understood.
+Microsoft recommends VMs be deploy into a carefully planned network; sized appropriately for your needs and with proper network observability. Organizations typically favor a traditional hub-spoke model, which is reflected from derivatives of this implementation such as landing zones.
 
 The following two resource groups will be created and populated with networking resources in the steps below.
 
@@ -265,7 +265,7 @@ The following two resource groups will be created and populated with networking 
    The spoke creation will emit the following:
 
      * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
-     * `spokeVnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
+     * `vnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
      * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-backend ]`
 
 ### 3. Deploying the VMs and Workload
@@ -314,12 +314,21 @@ This is the heart of the guidance in this reference implementation; paired with 
    BACKEND_CLOUDINIT_BASE64=$(base64 backendCloudInit.yml | tr -d '\n')
    ```
 
+1. Get the spoke virtual network resource ID.
+
+   > :book: The app team will be deploying to a spoke virtual network, that was already provisioned by the network team.
+
+   ```bash
+   export RESOURCEID_VNET_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.vnetResourceId.value -o tsv)
+   echo RESOURCEID_VNET_IAAS_BASELINE: $RESOURCEID_VNET_IAAS_BASELINE
+   ```
+
 1. Deploy the compute infrastructure stamp ARM template.
   :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
    # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_SPOKE_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
    ```
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./azuredeploy.parameters.prod.json) file and deployed as above, using `-p "@azuredeploy.parameters.prod.json"` instead of providing the individual key-value pairs.
@@ -371,17 +380,17 @@ This is the heart of the guidance in this reference implementation; paired with 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
 
-1. Get the regional hub Azure Bastion name.
+1. Get the Azure Bastion name.
 
    ```bash
-   AB_NAME_HUB=$(az deployment group show -g rg-enterprise-networking-hubs -n hub-regionA --query properties.outputs.abName.value -o tsv)
-   echo AB_NAME_HUB: $AB_NAME_HUB
+   AB_NAME=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.bastionHostName.value -o tsv)
+   echo AB_NAME: $AB_NAME
    ```
 
 1. Remote ssh using Bastion into a frontend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME_HUB -g rg-enterprise-networking-hubs --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
    ```
 
 1. Validate your workload (a Nginx instance) is running in the frontend
@@ -399,7 +408,7 @@ This is the heart of the guidance in this reference implementation; paired with 
 1. Remote to a Windows backend VM using Bastion
 
    ```bash
-   az network bastion rdp -n $AB_NAME_HUB -g rg-enterprise-networking-hubs --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   az network bastion rdp -n $AB_NAME -g rg-iaas --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
    ```
 
    :warning: the bastion rdp command will work from Windows machines. Other platforms might need to remote your VM Windows machines from [Azure portal using Bastion](https://learn.microsoft.com/azure/bastion/bastion-overview)
@@ -444,7 +453,7 @@ This section will help you to validate the workload is exposed correctly and res
 1. Validate your workload is reachable over internet through your Azure Application Gateway public endpoint
 
    ```bash
-   curl https://contoso.com/api --resolve contoso.com:443:$APPGW_PUBLIC_IP -k
+   curl https://contoso.com --resolve contoso.com:443:$APPGW_PUBLIC_IP -k
    ```
 
 1. Browse to the site (e.g. <https://contoso.com>).

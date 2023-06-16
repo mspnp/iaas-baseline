@@ -2,7 +2,7 @@ targetScope = 'resourceGroup'
 
 /*** PARAMETERS ***/
 
-@description('The regional network spoke VNet Resource ID that will host the VM\'s NIC')
+@description('The regional network VNet Resource ID that will host the VM\'s NIC')
 @minLength(79)
 param targetVnetResourceId string
 
@@ -55,7 +55,8 @@ param adminPassword string
 var subRgUniqueString = uniqueString('vmss', subscription().subscriptionId, resourceGroup().id)
 var vmssName = 'vmss-${subRgUniqueString}'
 var agwName = 'agw-${vmssName}'
-var lbName = 'ilb-${vmssName}'
+var ilbName = 'ilb-${vmssName}'
+var olbName = 'olb-${vmssName}'
 
 var ingressDomainName = 'iaas-ingress.${domainName}'
 var vmssBackendSubdomain = 'backend'
@@ -86,47 +87,47 @@ resource logAnalyticsContributorUserRole 'Microsoft.Authorization/roleDefinition
 
 /*** EXISTING RESOURCES ***/
 
-// Spoke resource group
+// resource group
 resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
   scope: subscription()
   name: '${split(targetVnetResourceId,'/')[4]}'
 }
 
-// Spoke virtual network
+// Virtual network
 resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
   scope: targetResourceGroup
   name: '${last(split(targetVnetResourceId,'/'))}'
 
-  // Spoke virtual network's subnet for the nic vms
+  // Virtual network's subnet for the nic vms
   resource snetFrontend 'subnets' existing = {
     name: 'snet-frontend'
   }
 
-  // Spoke virtual network's subnet for the nic vms
+  // Virtual network's subnet for the nic vms
   resource snetBackend 'subnets' existing = {
     name: 'snet-backend'
   }
 
-  // Spoke virtual network's subnet for the nic ilb
+  // Virtual network's subnet for the nic ilb
   resource snetInternalLoadBalancer 'subnets' existing = {
     name: 'snet-ilbs'
   }
 
-  // Spoke virtual network's subnet for all private endpoints
+  // Virtual network's subnet for all private endpoints
   resource snetPrivatelinkendpoints 'subnets' existing = {
     name: 'snet-privatelinkendpoints'
   }
 
-  // Spoke virtual network's subnet for application gateway
+  // Virtual network's subnet for application gateway
   resource snetApplicationGateway 'subnets' existing = {
     name: 'snet-applicationgateway'
   }
 }
 
 // Log Analytics Workspace
-resource la 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
-  name: 'la-${vmssName}'
+resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  scope: targetResourceGroup
+  name: 'log-${location}'
 }
 
 // Default ASG on the vmss frontend. Feel free to constrict further.
@@ -170,32 +171,32 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
 }
 
 // User Managed Identity that App Gateway is assigned. Used for Azure Key Vault Access.
-resource miAppGatewayFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'mi-appgateway'
+resource idAppGatewayFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'id-appgateway'
   location: location
 }
 
 @description('The managed identity for frontend instances')
-resource miVmssFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'mi-vm-frontent'
+resource idVmssFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'id-vm-frontent'
   location: location
 }
 
 @description('The managed identity for backend instances')
-resource miVmssBackend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'mi-vm-backent'
+resource idVmssBackend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'id-vm-backent'
   location: location
 }
 
 @description('The compute for frontend instances; these machines are assigned to the frontend app team to deploy their workloads')
 resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
-  name: 'vmss-frontend-00'
+  name: 'vmss-frontend'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${miVmssFrontend.id}': {}
+      '${idVmssFrontend.id}': {}
     }
   }
   sku: {
@@ -254,7 +255,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-spoke-frontend'
+            name: 'nic-frontend'
             properties: {
               primary: true
               enableIPForwarding: false
@@ -270,6 +271,11 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                     subnet: {
                       id: targetVirtualNetwork::snetFrontend.id
                     }
+                    loadBalancerBackendAddressPools: [
+                      {
+                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
+                      }
+                    ]
                     applicationGatewayBackendAddressPools: [
                       {
                         id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'webappBackendPool')
@@ -339,7 +345,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                 authentication: {
                   managedIdentity: {
                     'identifier-name': 'mi_res_id'
-                    'identifier-value': miVmssFrontend.id
+                    'identifier-value': idVmssFrontend.id
                   }
                 }
               }
@@ -384,23 +390,23 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
   }
   dependsOn: [
     agw
+    outboundLoadBalancer
     omsVmssInsights
     kvMiVmssFrontendSecretsUserRole_roleAssignment
     kvMiVmssFrontendKeyVaultReader_roleAssignment
+    vmssBackend
   ]
-
-
 }
 
 @description('The compute for backend instances; these machines are assigned to the api app team so they can deploy their workloads.')
-resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
-  name: 'vmss-backend-00'
+resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
+  name: 'vmss-backend'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${miVmssBackend.id}': {}
+      '${idVmssBackend.id}': {}
     }
   }
   sku: {
@@ -489,7 +495,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
-            name: 'nic-vnet-spoke-backend'
+            name: 'nic-backend'
             properties: {
               deleteOption: 'Delete'
               primary: true
@@ -508,7 +514,10 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                     }
                     loadBalancerBackendAddressPools: [
                       {
-                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', lbName, 'apiBackendPool')
+                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', ilbName, 'apiBackendPool')
+                      }
+                      {
+                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
                       }
                     ]
                     applicationSecurityGroups: [
@@ -586,7 +595,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                 authentication: {
                   managedIdentity: {
                     'identifier-name': 'mi_res_id'
-                    'identifier-value': miVmssBackend.id
+                    'identifier-value': idVmssBackend.id
                   }
                 }
               }
@@ -646,19 +655,20 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
   }
   dependsOn: [
     omsVmssInsights
-    loadBalancer
+    internalLoadBalancer
+    outboundLoadBalancer
     kvMiVmssBackendSecretsUserRole_roleAssignment
   ]
 }
 
 resource omsVmssInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
-  name: 'VMInsights(${la.name})'
+  name: 'VMInsights(${logAnaliticsWorkspace.name})'
   location: location
   properties: {
-    workspaceResourceId: la.id
+    workspaceResourceId: logAnaliticsWorkspace.id
   }
   plan: {
-    name: 'VMInsights(${la.name})'
+    name: 'VMInsights(${logAnaliticsWorkspace.name})'
     product: 'OMSGallery/VMInsights'
     promotionCode: ''
     publisher: 'Microsoft'
@@ -690,7 +700,7 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
     createMode: 'default'
   }
   dependsOn: [
-    miAppGatewayFrontend
+    idAppGatewayFrontend
   ]
 
   resource kvsAppGwInternalVmssWebserverTls 'secrets' = {
@@ -720,7 +730,7 @@ resource kv_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01
   scope: kv
   name: 'default'
   properties: {
-    workspaceId: la.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         category: 'AuditEvent'
@@ -742,7 +752,7 @@ resource kvMiAppGatewayFrontendSecretsUserRole_roleAssignment 'Microsoft.Authori
   name: guid(resourceGroup().id, 'mi-appgateway', keyVaultSecretsUserRole.id)
   properties: {
     roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: miAppGatewayFrontend.properties.principalId
+    principalId: idAppGatewayFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -753,7 +763,7 @@ resource kvMiAppGatewayFrontendKeyVaultReader_roleAssignment 'Microsoft.Authoriz
   name: guid(resourceGroup().id, 'mi-appgateway', keyVaultReaderRole.id)
   properties: {
     roleDefinitionId: keyVaultReaderRole.id
-    principalId: miAppGatewayFrontend.properties.principalId
+    principalId: idAppGatewayFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -764,7 +774,7 @@ resource kvMiVmssFrontendSecretsUserRole_roleAssignment 'Microsoft.Authorization
   name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultSecretsUserRole.id)
   properties: {
     roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: miVmssFrontend.properties.principalId
+    principalId: idVmssFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -775,7 +785,7 @@ resource kvMiVmssFrontendKeyVaultReader_roleAssignment 'Microsoft.Authorization/
   name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultReaderRole.id)
   properties: {
     roleDefinitionId: keyVaultReaderRole.id
-    principalId: miVmssFrontend.properties.principalId
+    principalId: idVmssFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -786,7 +796,7 @@ resource laMiVmssFrontendContributorUserRole_roleAssignment 'Microsoft.Authoriza
   name: guid(resourceGroup().id, 'mi-vm-frontent', logAnalyticsContributorUserRole.id)
   properties: {
     roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: miVmssFrontend.properties.principalId
+    principalId: idVmssFrontend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -797,7 +807,7 @@ resource kvMiVmssBackendSecretsUserRole_roleAssignment 'Microsoft.Authorization/
   name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultSecretsUserRole.id)
   properties: {
     roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: miVmssBackend.properties.principalId
+    principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -808,7 +818,7 @@ resource kvMiVmssBackendKeyVaultReader_roleAssignment 'Microsoft.Authorization/r
   name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultReaderRole.id)
   properties: {
     roleDefinitionId: keyVaultReaderRole.id
-    principalId: miVmssBackend.properties.principalId
+    principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -819,7 +829,7 @@ resource laMiVmssBackendContributorUserRole_roleAssignment 'Microsoft.Authorizat
   name: guid(resourceGroup().id, 'mi-vm-backent', logAnalyticsContributorUserRole.id)
   properties: {
     roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: miVmssBackend.properties.principalId
+    principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -842,8 +852,8 @@ resource pdzKv 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   }
 }
 
-resource peKv 'Microsoft.Network/privateEndpoints@2021-05-01' = {
-  name: 'pe-${kv.name}'
+resource pepKv 'Microsoft.Network/privateEndpoints@2021-05-01' = {
+  name: 'pep-${kv.name}'
   location: location
   properties: {
     subnet: {
@@ -911,7 +921,7 @@ resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${miAppGatewayFrontend.id}': {}
+      '${idAppGatewayFrontend.id}': {}
     }
   }
   zones: pickZones('Microsoft.Network', 'applicationGateways', location, 3)
@@ -1060,14 +1070,14 @@ resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
     ]
   }
   dependsOn: [
-    peKv
+    pepKv
     kvMiAppGatewayFrontendKeyVaultReader_roleAssignment
     kvMiAppGatewayFrontendSecretsUserRole_roleAssignment
   ]
 }
 
-resource loadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
-  name: lbName
+resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
+  name: ilbName
   location: location
   sku: {
     name: 'Standard'
@@ -1099,13 +1109,13 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
       {
         properties: {
           frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', lbName, 'ilbBackend')
+            id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', ilbName, 'ilbBackend')
           }
           backendAddressPool: {
-            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', lbName, 'apiBackendPool')
+            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', ilbName, 'apiBackendPool')
           }
           probe: {
-            id: resourceId('Microsoft.Network/loadBalancers/probes', lbName, 'ilbprobe')
+            id: resourceId('Microsoft.Network/loadBalancers/probes', ilbName, 'ilbprobe')
           }
           protocol: 'Tcp'
           frontendPort: 443
@@ -1126,6 +1136,88 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
         name: 'ilbprobe'
       }
     ]
+  }
+  dependsOn: []
+}
+
+var numOutboundLoadBalancerIpAddressesToAssign = 3
+resource pipsOutboundLoadbalanacer 'Microsoft.Network/publicIPAddresses@2021-05-01' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+  name: 'pip-olb-${location}-${padLeft(i, 2, '0')}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  zones: [
+    '1'
+    '2'
+    '3'
+  ]
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    idleTimeoutInMinutes: 4
+    publicIPAddressVersion: 'IPv4'
+  }
+}]
+
+resource pipsOutboundLoadbalanacer_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+  name: 'default'
+  scope: pipsOutboundLoadbalanacer[i]
+  properties: {
+    workspaceId: logAnaliticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}]
+
+resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
+  name: olbName
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    frontendIPConfigurations: [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+        name: pipsOutboundLoadbalanacer[i].name
+        properties: {
+          publicIPAddress: {
+            id: pipsOutboundLoadbalanacer[i].id
+          }
+        }
+    }]
+    backendAddressPools: [
+      {
+        name: 'outboundBackendPool'
+      }
+    ]
+    outboundRules: [
+      {
+        properties: {
+          allocatedOutboundPorts: 32000 // this value must be the total number of available ports divided the amount of vms (e.g. 64000*3/6, where 64000 is the amount of port, 3 the selected number of ips and 6 the numbers of vms)
+          enableTcpReset: true
+          protocol: 'Tcp'
+          idleTimeoutInMinutes: 15
+          frontendIPConfigurations: [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+              id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', olbName, pipsOutboundLoadbalanacer[i].name)
+          }]
+          backendAddressPool: {
+            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
+          }
+        }
+        name: 'olbrule'
+      }
+    ]
+    loadBalancingRules: []
+    probes: []
   }
   dependsOn: []
 }
