@@ -22,6 +22,7 @@ targetScope = 'resourceGroup'
 @description('The spokes\'s regional affinity, must be the same as the hub\'s location. All resources tied to this spoke will also be homed in this region. The network team maintains this approved regional list which is a subset of zones with Availability Zone support.')
 param location string
 
+/*** VARIABLES ***/
 // A designator that represents a business unit id and application id
 var clusterVNetName = 'vnet'
 
@@ -718,6 +719,55 @@ resource nsgPrivateLinkEndpointsSubnet 'Microsoft.Network/networkSecurityGroups@
   }
 }
 
+// NSG on the Deployment Agent subnet.
+resource nsgDeploymentAgentSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${clusterVNetName}-deploymentagent'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowAll443InFromVnet'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllInbound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllOutbound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Outbound'
+        }
+      }
+    ]
+  }
+}
+
 resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: nsgPrivateLinkEndpointsSubnet
   name: 'default'
@@ -735,13 +785,13 @@ resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/d
 // The spoke virtual network.
 // 65,536 (-reserved) IPs available to the workload, split across subnets four subnets for Compute,
 // one for App Gateway and one for Private Link endpoints.
-resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
+resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
   name: clusterVNetName
   location: location
   properties: {
     addressSpace: {
       addressPrefixes: [
-        '10.240.0.0/16'
+        '10.240.0.0/21'
       ]
     }
     subnets: [
@@ -784,6 +834,17 @@ resource vnetSpoke 'Microsoft.Network/virtualNetworks@2021-05-01' = {
           addressPrefix: '10.240.4.32/28'
           networkSecurityGroup: {
             id: nsgPrivateLinkEndpointsSubnet.id
+          }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+      }
+      {
+        name: 'snet-deploymentagent'
+        properties: {
+          addressPrefix: '10.240.4.64/28'
+          networkSecurityGroup: {
+            id: nsgDeploymentAgentSubnet.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
@@ -872,7 +933,7 @@ resource azureBastion 'Microsoft.Network/bastionHosts@2021-05-01' = {
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: vnetHub::azureBastionSubnet.id
+            id: vnet::azureBastionSubnet.id
           }
           publicIPAddress: {
             id: pipAzureBastion.id
@@ -890,7 +951,7 @@ resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@
   name: 'default'
   scope: azureBastion
   properties: {
-    workspaceId: laHub.id
+    workspaceId: logAnaliticsWorkspace.id
     logs: [
       {
         category: 'BastionAuditLogs'
@@ -900,8 +961,8 @@ resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@
   }
 }
 
-resource vnetSpoke_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: vnetSpoke
+resource vnet_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vnet
   name: 'default'
   properties: {
     workspaceId: logAnaliticsWorkspace.id
@@ -950,11 +1011,48 @@ resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSe
   }
 }
 
+// Used as primary public outbound point for the workload. Expected to be assigned to an Azure Outbound Application Gateway.
+// This is a public IP, and would be best behind a DDoS Policy (not deployed simply for cost considerations)
+resource pipOutboundLoadBalancerIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+  name: 'pip-olb'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  zones: pickZones('Microsoft.Network', 'publicIPAddresses', location, 3)
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    idleTimeoutInMinutes: 4
+    publicIPAddressVersion: 'IPv4'
+  }
+}
+
+resource pipOutboundLoadBalancerIp_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
+  name: 'default'
+  scope: pipOutboundLoadBalancerIp
+  properties: {
+    workspaceId: logAnaliticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
 /*** OUTPUTS ***/
 
-output spokeVnetResourceId string = vnetSpoke.id
+output vnetResourceId string = vnet.id
 output vmssSubnetResourceIds array = [
-  vnetSpoke::snetFrontend.id
-  vnetSpoke::snetBackend.id
+  vnet::snetFrontend.id
+  vnet::snetBackend.id
 ]
 output appGwPublicIpAddress string = pipPrimaryWorkloadIp.properties.ipAddress
+output bastionHostName string = azureBastion.name
