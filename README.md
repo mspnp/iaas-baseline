@@ -38,10 +38,10 @@ Finally, this implementation uses [Nginx](https://nginx.org) as an example workl
   - [Autoscale](https://learn.microsoft.com/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-autoscale-overview)
   - [Ephemeral OS disks](https://learn.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks)
   - Managed Identities
-- Azure Virtual Networks (hub-spoke)
-  - Azure Firewall managed egress
+- Azure Virtual Networks
 - Azure Application Gateway (WAF)
 - Internal Load Balancers
+- Azure Load Balancer egress
 
 #### In-VM OSS components
 
@@ -165,7 +165,7 @@ There are considerations that must be addressed before you start deploying your 
 
 1. Query and save your Azure subscription's tenant id.
 
-   > :book: The Contoso Azure AD team requires all operations user access to be security-group based. This applies to the new VMs that are being created for Application ID a0008 under the BU0001 business unit. VM logging will be AAD-backed and access granted based on users' AAD group membership(s).
+   > :book: The Contoso Azure AD team requires all operations user access to be security-group based. This applies to the new VMs that are being created for the workload. VM logging will be AAD-backed and access granted based on users' AAD group membership(s).
 
    ```bash
    export TENANTID_AZSUBSCRIPTION_IAAS_BASELINE=$(az account show --query tenantId -o tsv)
@@ -193,7 +193,7 @@ There are considerations that must be addressed before you start deploying your 
    If you want to create a new one instead, you can use the following code:
 
    ```bash
-   export AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE=$(az ad group create --display-name 'compute-admins-bu0001a000800' --mail-nickname 'compute-admins-bu0001a000800' --description "Principals in this group are compute admins in the bu0001a000800 VMs." --query id -o tsv)
+   export AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE=$(az ad group create --display-name 'iaas-admins' --mail-nickname 'iaas-admins' --description "Principals in this group are iaas admin VMs." --query id -o tsv)
    echo AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE: $AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE
    ```
 
@@ -207,8 +207,8 @@ There are considerations that must be addressed before you start deploying your 
 
    ```bash
    TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE=$(az ad signed-in-user show --query 'userPrincipalName' -o tsv | cut -d '@' -f 2 | sed 's/\"//')
-   AADOBJECTNAME_USER_COMPUTEADMIN=bu0001a000800-admin
-   AADOBJECTID_USER_COMPUTEADMIN=$(az ad user create --display-name=${AADOBJECTNAME_USER_COMPUTEADMIN} --user-principal-name ${AADOBJECTNAME_USER_COMPUTEADMIN}@${TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE} --force-change-password-next-sign-in --password ChangeMebu0001a0008AdminChangeMe --query id -o tsv)
+   AADOBJECTNAME_USER_COMPUTEADMIN=iaas-admin
+   AADOBJECTID_USER_COMPUTEADMIN=$(az ad user create --display-name=${AADOBJECTNAME_USER_COMPUTEADMIN} --user-principal-name ${AADOBJECTNAME_USER_COMPUTEADMIN}@${TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE} --force-change-password-next-sign-in --password ChangeMeIaaSAdminChangeMe --query id -o tsv)
    echo TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE: $TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE
    echo AADOBJECTNAME_USER_COMPUTEADMIN: $AADOBJECTNAME_USER_COMPUTEADMIN
    echo AADOBJECTID_USER_COMPUTEADMIN: $AADOBJECTID_USER_COMPUTEADMIN
@@ -224,11 +224,11 @@ There are considerations that must be addressed before you start deploying your 
    az ad group member add -g $AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE --member-id $AADOBJECTID_USER_COMPUTEADMIN
    ```
 
-   :bulb: If you are using a single tenant for this walk-through, the compute deployment step later will take care of the necessary role assignments for the groups created above. Specifically, in the above steps, you created the the Azure AD security group `compute-admins-bu0001a000800` is going to contain compute admins. Those group Object IDs will be associated to the 'Virtual Machine Administrator Login' [RBAC role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#virtual-machine-administrator-login). Using Azure RBAC as your authorization approach is ultimately preferred as it allows for the unified management and access control across Azure Resources, VMs, and VM resources. At the time of this writing there are ten [Azure RBAC roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#compute) that represent typical compute access patterns.
+   :bulb: If you are using a single tenant for this walk-through, the compute deployment step later will take care of the necessary role assignments for the groups created above. Specifically, in the above steps, you created the the Azure AD security group `iaas-admins` is going to contain compute admins. Those group Object IDs will be associated to the 'Virtual Machine Administrator Login' [RBAC role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#virtual-machine-administrator-login). Using Azure RBAC as your authorization approach is ultimately preferred as it allows for the unified management and access control across Azure Resources, VMs, and VM resources. At the time of this writing there are ten [Azure RBAC roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#compute) that represent typical compute access patterns.
 
 ### 2. Build target network
 
-Microsoft recommends VMs be deploy into a carefully planned network; sized appropriately for your needs and with proper network observability. Organizations typically favor a traditional hub-spoke model, which is reflected in this implementation. While this is a standard hub-spoke model, there are fundamental sizing and portioning considerations included that should be understood.
+Microsoft recommends VMs be deploy into a carefully planned network; sized appropriately for your needs and with proper network observability. Organizations typically favor a traditional hub-spoke model, which is reflected from derivatives of this implementation such as landing zones.
 
 The following two resource groups will be created and populated with networking resources in the steps below.
 
@@ -259,14 +259,14 @@ The following two resource groups will be created and populated with networking 
 
    ```bash
    # [This takes about four minutes to run.]
-   az deployment group create -g rg-iaas -f networking/spoke-BU0001A0008.bicep -p location=eastus2
+   az deployment group create -g rg-iaas -f networking/vnet.bicep -p location=eastus2
    ```
 
    The spoke creation will emit the following:
 
      * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
-     * `spokeVnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-spoke-BU0001A0008-00`
-     * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-spoke-BU0001A0008-00/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-spoke-BU0001A0008-00/subnet/snet-backend ]`
+     * `vnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
+     * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-backend ]`
 
 ### 3. Deploying the VMs and Workload
 
@@ -314,12 +314,21 @@ This is the heart of the guidance in this reference implementation; paired with 
    BACKEND_CLOUDINIT_BASE64=$(base64 backendCloudInit.yml | tr -d '\n')
    ```
 
+1. Get the spoke virtual network resource ID.
+
+   > :book: The app team will be deploying to a spoke virtual network, that was already provisioned by the network team.
+
+   ```bash
+   export RESOURCEID_VNET_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.vnetResourceId.value -o tsv)
+   echo RESOURCEID_VNET_IAAS_BASELINE: $RESOURCEID_VNET_IAAS_BASELINE
+   ```
+
 1. Deploy the compute infrastructure stamp ARM template.
   :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
    # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_SPOKE_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
    ```
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./azuredeploy.parameters.prod.json) file and deployed as above, using `-p "@azuredeploy.parameters.prod.json"` instead of providing the individual key-value pairs.
@@ -371,23 +380,23 @@ This is the heart of the guidance in this reference implementation; paired with 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
 
-1. Get the regional hub Azure Bastion name.
+1. Get the Azure Bastion name.
 
    ```bash
-   AB_NAME_HUB=$(az deployment group show -g rg-enterprise-networking-hubs -n hub-regionA --query properties.outputs.abName.value -o tsv)
-   echo AB_NAME_HUB: $AB_NAME_HUB
+   AB_NAME=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.bastionHostName.value -o tsv)
+   echo AB_NAME: $AB_NAME
    ```
 
 1. Remote ssh using Bastion into a frontend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME_HUB -g rg-enterprise-networking-hubs --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
    ```
 
 1. Validate your workload (a Nginx instance) is running in the frontend
 
    ```bash
-   curl https://bu0001a0008-00-frontend.iaas-ingress.contoso.com/ --resolve bu0001a0008-00-frontend.iaas-ingress.contoso.com:443:127.0.0.1 -k
+   curl https://frontend.iaas-ingress.contoso.com/ --resolve frontend.iaas-ingress.contoso.com:443:127.0.0.1 -k
    ```
 
 1. Exit the ssh session from the frontend VM
@@ -399,7 +408,7 @@ This is the heart of the guidance in this reference implementation; paired with 
 1. Remote to a Windows backend VM using Bastion
 
    ```bash
-   az network bastion rdp -n $AB_NAME_HUB -g rg-enterprise-networking-hubs --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   az network bastion rdp -n $AB_NAME -g rg-iaas --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
    ```
 
    :warning: the bastion rdp command will work from Windows machines. Other platforms might need to remote your VM Windows machines from [Azure portal using Bastion](https://learn.microsoft.com/azure/bastion/bastion-overview)
@@ -431,7 +440,7 @@ This section will help you to validate the workload is exposed correctly and res
 
    ```bash
    # query the Azure Application Gateway Public Ip
-   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n spoke-BU0001A0008 --query properties.outputs.appGwPublicIpAddress.value -o tsv)
+   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.appGwPublicIpAddress.value -o tsv)
    echo APPGW_PUBLIC_IP: $APPGW_PUBLIC_IP
    ```
 
@@ -444,7 +453,7 @@ This section will help you to validate the workload is exposed correctly and res
 1. Validate your workload is reachable over internet through your Azure Application Gateway public endpoint
 
    ```bash
-   curl https://contoso.com/api --resolve contoso.com:443:$APPGW_PUBLIC_IP -k
+   curl https://contoso.com --resolve contoso.com:443:$APPGW_PUBLIC_IP -k
    ```
 
 1. Browse to the site (e.g. <https://contoso.com>).
@@ -467,7 +476,7 @@ Your workload is placed behind a Web Application Firewall (WAF), which has rules
 1. Observe that your request was blocked by Application Gateway's WAF rules and your workload never saw this potentially dangerous request.
 1. Blocked requests (along with other gateway data) will be visible in the attached Log Analytics workspace.
 
-   Browse to the Application Gateway in the resource group `rg-bu0001-a0008` and navigate to the _Logs_ blade. Execute the following query below to show WAF logs and see that the request was rejected due to a _SQL Injection Attack_ (field _Message_).
+   Browse to the Application Gateway in the resource group `rg-iaas` and navigate to the _Logs_ blade. Execute the following query below to show WAF logs and see that the request was rejected due to a _SQL Injection Attack_ (field _Message_).
 
    > :warning: Note that it may take a couple of minutes until the logs are transferred from the Application Gateway to the Log Analytics Workspace. So be a little patient if the query does not immediatly return results after sending the https request in the former step.
 
