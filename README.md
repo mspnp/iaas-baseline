@@ -453,7 +453,7 @@ This section will help you to validate the workload is exposed correctly and res
 1. Validate your workload is reachable over internet through your Azure Application Gateway public endpoint
 
    ```bash
-   curl https://contoso.com/api --resolve contoso.com:443:$APPGW_PUBLIC_IP -k
+   curl https://contoso.com --resolve contoso.com:443:$APPGW_PUBLIC_IP -k
    ```
 
 1. Browse to the site (e.g. <https://contoso.com>).
