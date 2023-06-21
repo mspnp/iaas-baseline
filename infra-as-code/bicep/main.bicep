@@ -65,6 +65,8 @@ var vmssFrontendDomainName = '${vmssFrontendSubdomain}.${ingressDomainName}'
 
 var defaultAdminUserName = uniqueString(vmssName, resourceGroup().id)
 
+var numberOfAvailabilityZones = 3
+
 /*** EXISTING SUBSCRIPTION RESOURCES ***/
 
 // Built-in Azure RBAC role that is applied a Key Vault to grant with metadata, certificates, keys and secrets read privileges.  Granted to App Gateway's managed identity.
@@ -143,38 +145,6 @@ resource asgVmssBackend 'Microsoft.Network/applicationSecurityGroups@2022-07-01'
 }
 
 /*** RESOURCES ***/
-
-resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies@2021-05-01' = {
-  name: 'waf-${vmssName}'
-  location: location
-  properties: {
-    policySettings: {
-      fileUploadLimitInMb: 10
-      state: 'Enabled'
-      mode: 'Prevention'
-    }
-    managedRules: {
-      managedRuleSets: [
-        {
-            ruleSetType: 'OWASP'
-            ruleSetVersion: '3.2'
-            ruleGroupOverrides: []
-        }
-        {
-          ruleSetType: 'Microsoft_BotManagerRuleSet'
-          ruleSetVersion: '0.1'
-          ruleGroupOverrides: []
-        }
-      ]
-    }
-  }
-}
-
-// User Managed Identity that App Gateway is assigned. Used for Azure Key Vault Access.
-resource idAppGatewayFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'id-appgateway'
-  location: location
-}
 
 @description('The managed identity for frontend instances')
 resource idVmssFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
@@ -389,7 +359,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     }
   }
   dependsOn: [
-    agw
+    gatewayModule
     outboundLoadBalancer
     omsVmssInsights
     kvMiVmssFrontendSecretsUserRole_roleAssignment
@@ -700,7 +670,6 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
     createMode: 'default'
   }
   dependsOn: [
-    idAppGatewayFrontend
   ]
 
   resource kvsAppGwInternalVmssWebserverTls 'secrets' = {
@@ -743,28 +712,6 @@ resource kv_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01
         enabled: true
       }
     ]
-  }
-}
-
-// Grant the Azure Application Gateway managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
-resource kvMiAppGatewayFrontendSecretsUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
-  name: guid(resourceGroup().id, 'mi-appgateway', keyVaultSecretsUserRole.id)
-  properties: {
-    roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: idAppGatewayFrontend.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// Grant the Azure Application Gateway managed identity with key vault reader role permissions; this allows pulling frontend and backend certificates.
-resource kvMiAppGatewayFrontendKeyVaultReader_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
-  name: guid(resourceGroup().id, 'mi-appgateway', keyVaultReaderRole.id)
-  properties: {
-    roleDefinitionId: keyVaultReaderRole.id
-    principalId: idAppGatewayFrontend.properties.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 
@@ -915,164 +862,19 @@ resource pdzVmss 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   }
 }
 
-resource agw 'Microsoft.Network/applicationGateways@2021-05-01' = {
-  name: agwName
-  location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${idAppGatewayFrontend.id}': {}
-    }
-  }
-  zones: pickZones('Microsoft.Network', 'applicationGateways', location, 3)
-  properties: {
-    sku: {
-      name: 'WAF_v2'
-      tier: 'WAF_v2'
-    }
-    sslPolicy: {
-      policyType: 'Custom'
-      cipherSuites: [
-        'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384'
-        'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256'
-      ]
-      minProtocolVersion: 'TLSv1_2'
-    }
-    trustedRootCertificates: [
-      {
-        name: 'root-cert-wildcard-vmss-webserver'
-        properties: {
-          keyVaultSecretId: kv::kvsAppGwInternalVmssWebserverTls.properties.secretUri
-        }
-      }
-    ]
-    gatewayIPConfigurations: [
-      {
-        name: 'agw-ip-configuration'
-        properties: {
-          subnet: {
-            id: targetVirtualNetwork::snetApplicationGateway.id
-          }
-        }
-      }
-    ]
-    frontendIPConfigurations: [
-      {
-        name: 'agw-frontend-ip-configuration'
-        properties: {
-          publicIPAddress: {
-            id: resourceId(subscription().subscriptionId, targetResourceGroup.name, 'Microsoft.Network/publicIpAddresses', 'pip-gw')
-          }
-        }
-      }
-    ]
-    frontendPorts: [
-      {
-        name: 'port-443'
-        properties: {
-          port: 443
-        }
-      }
-    ]
-    autoscaleConfiguration: {
-      minCapacity: 0
-      maxCapacity: 10
-    }
-    firewallPolicy: {
-      id: wafPolicy.id
-    }
-    enableHttp2: false
-    sslCertificates: [
-      {
-        name: '${agwName}-ssl-certificate'
-        properties: {
-          keyVaultSecretId: kv::kvsGatewayPublicCert.properties.secretUri
-        }
-      }
-    ]
-    probes: [
-      {
-        name: 'probe-${vmssFrontendDomainName}'
-        properties: {
-          protocol: 'Https'
-          path: '/favicon.ico'
-          interval: 30
-          timeout: 30
-          unhealthyThreshold: 3
-          pickHostNameFromBackendHttpSettings: true
-          minServers: 0
-          match: {}
-        }
-      }
-    ]
-    backendAddressPools: [
-      {
-        name: 'webappBackendPool'
-      }
-    ]
-    backendHttpSettingsCollection: [
-      {
-        name: 'vmss-webserver-backendpool-httpsettings'
-        properties: {
-          port: 443
-          protocol: 'Https'
-          cookieBasedAffinity: 'Disabled'
-          hostName: vmssFrontendDomainName
-          pickHostNameFromBackendAddress: false
-          requestTimeout: 20
-          probe: {
-            id: resourceId('Microsoft.Network/applicationGateways/probes', agwName, 'probe-${vmssFrontendDomainName}')
-          }
-          trustedRootCertificates: [
-            {
-              id: resourceId('Microsoft.Network/applicationGateways/trustedRootCertificates', agwName, 'root-cert-wildcard-vmss-webserver')
-            }
-          ]
-        }
-      }
-    ]
-    httpListeners: [
-      {
-        name: 'listener-https'
-        properties: {
-          frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', agwName, 'agw-frontend-ip-configuration')
-          }
-          frontendPort: {
-            id: resourceId('Microsoft.Network/applicationGateways/frontendPorts', agwName, 'port-443')
-          }
-          protocol: 'Https'
-          sslCertificate: {
-            id: resourceId('Microsoft.Network/applicationGateways/sslCertificates', agwName, '${agwName}-ssl-certificate')
-          }
-          hostName: domainName
-          hostNames: []
-          requireServerNameIndication: true
-        }
-      }
-    ]
-    requestRoutingRules: [
-      {
-        name: 'agw-routing-rules'
-        properties: {
-          ruleType: 'Basic'
-          httpListener: {
-            id: resourceId('Microsoft.Network/applicationGateways/httpListeners', agwName, 'listener-https')
-          }
-          backendAddressPool: {
-            id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'webappBackendPool')
-          }
-          backendHttpSettings: {
-            id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'vmss-webserver-backendpool-httpsettings')
-          }
-        }
-      }
-    ]
+//Deploy an Azure Application Gateway with WAF v2 and a custom domain name.
+module gatewayModule 'gateway.bicep' = {
+  name: 'gatewayDeploy'
+  params: {
+    location: location
+    targetSubnetResourceId: targetVirtualNetwork::snetApplicationGateway.id //networkModule.outputs.vnetResourceId
+    baseName: vmssName
+    gatewaySSLCertSecretUri: kv::kvsGatewayPublicCert.properties.secretUri
+    gatewayTrustedRootSSLCertSecretUri: kv::kvsAppGwInternalVmssWebserverTls.properties.secretUri
+    gatewayHostName: domainName
   }
   dependsOn: [
     pepKv
-    kvMiAppGatewayFrontendKeyVaultReader_roleAssignment
-    kvMiAppGatewayFrontendSecretsUserRole_roleAssignment
   ]
 }
 
@@ -1202,7 +1004,7 @@ resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
     outboundRules: [
       {
         properties: {
-          allocatedOutboundPorts: 32000 // this value must be the total number of available ports divided the amount of vms (e.g. 64000*3/6, where 64000 is the amount of port, 3 the selected number of ips and 6 the numbers of vms)
+          allocatedOutboundPorts: 16000 // this value must be the total number of available ports divided the amount of vms (e.g. 64000*3/6, where 64000 is the amount of port, 3 the selected number of ips and 6 the numbers of vms)
           enableTcpReset: true
           protocol: 'Tcp'
           idleTimeoutInMinutes: 15
