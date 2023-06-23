@@ -56,38 +56,14 @@ param adminPassword string
 
 var subRgUniqueString = uniqueString('vmss', subscription().subscriptionId, resourceGroup().id)
 var vmssName = 'vmss-${subRgUniqueString}'
-var agwName = 'agw-${vmssName}'
 var ilbName = 'ilb-${vmssName}'
 var olbName = 'olb-${vmssName}'
 
 var ingressDomainName = 'iaas-ingress.${domainName}'
-var vmssBackendSubdomain = 'backend'
-var vmssFrontendSubdomain = 'frontend'
-var vmssFrontendDomainName = '${vmssFrontendSubdomain}.${ingressDomainName}'
-
-var defaultAdminUserName = uniqueString(vmssName, resourceGroup().id)
 
 var numberOfAvailabilityZones = 3
 
 /*** EXISTING SUBSCRIPTION RESOURCES ***/
-
-// Built-in Azure RBAC role that is applied a Key Vault to grant with metadata, certificates, keys and secrets read privileges.  Granted to App Gateway's managed identity.
-resource keyVaultReaderRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
-  name: '21090545-7ca7-4776-b22c-e363652d74d2'
-  scope: subscription()
-}
-
-// Built-in Azure RBAC role that is applied to a Key Vault to grant with secrets content read privileges. Granted to both Key Vault and our workload's identity.
-resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
-  name: '4633458b-17de-408a-b874-0445c86b69e6'
-  scope: subscription()
-}
-
-// Built-in Azure RBAC role that is applied to a Log Anlytics Workspace to grant with contrib access privileges. Granted to both frontend and backend user managed identities.
-resource logAnalyticsContributorUserRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
-  name: '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
-  scope: subscription()
-}
 
 /*** EXISTING RESOURCES ***/
 
@@ -102,29 +78,9 @@ resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' exi
   scope: targetResourceGroup
   name: '${last(split(targetVnetResourceId,'/'))}'
 
-  // Virtual network's subnet for the nic vms
-  resource snetFrontend 'subnets' existing = {
-    name: 'snet-frontend'
-  }
-
-  // Virtual network's subnet for the nic vms
-  resource snetBackend 'subnets' existing = {
-    name: 'snet-backend'
-  }
-
   // Virtual network's subnet for the nic ilb
   resource snetInternalLoadBalancer 'subnets' existing = {
     name: 'snet-ilbs'
-  }
-
-  // Virtual network's subnet for all private endpoints
-  resource snetPrivatelinkendpoints 'subnets' existing = {
-    name: 'snet-privatelinkendpoints'
-  }
-
-  // Virtual network's subnet for application gateway
-  resource snetApplicationGateway 'subnets' existing = {
-    name: 'snet-applicationgateway'
   }
 }
 
@@ -134,518 +90,7 @@ resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12
   name: 'log-${location}'
 }
 
-// Default ASG on the vmss frontend. Feel free to constrict further.
-resource asgVmssFrontend 'Microsoft.Network/applicationSecurityGroups@2022-07-01' existing = {
-  scope: targetResourceGroup
-  name: 'asg-frontend'
-}
-
-// Default ASG on the vmss backend. Feel free to constrict further.
-resource asgVmssBackend 'Microsoft.Network/applicationSecurityGroups@2022-07-01' existing = {
-  scope: targetResourceGroup
-  name: 'asg-backend'
-}
-
 /*** RESOURCES ***/
-
-@description('The managed identity for frontend instances')
-resource idVmssFrontend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'id-vm-frontent'
-  location: location
-}
-
-@description('The managed identity for backend instances')
-resource idVmssBackend 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'id-vm-backent'
-  location: location
-}
-
-@description('The compute for frontend instances; these machines are assigned to the frontend app team to deploy their workloads')
-resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
-  name: 'vmss-frontend'
-  location: location
-  zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${idVmssFrontend.id}': {}
-    }
-  }
-  sku: {
-    name: 'Standard_D4s_v3'
-    tier: 'Standard'
-    capacity: 3
-  }
-  properties: {
-    singlePlacementGroup: false
-    additionalCapabilities: {
-      ultraSSDEnabled: false
-    }
-    orchestrationMode: 'Flexible'
-    platformFaultDomainCount: 1
-    zoneBalance: false
-    virtualMachineProfile: {
-      diagnosticsProfile: {
-        bootDiagnostics: {
-          enabled: true
-        }
-      }
-      osProfile: {
-        computerNamePrefix: 'frontend'
-        linuxConfiguration: {
-          disablePasswordAuthentication: true
-          provisionVMAgent: true
-          ssh: {
-            publicKeys: [
-              {
-                path: '/home/${defaultAdminUserName}/.ssh/authorized_keys'
-                keyData: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCcFvQl2lYPcK1tMB3Tx2R9n8a7w5MJCSef14x0ePRFr9XISWfCVCNKRLM3Al/JSlIoOVKoMsdw5farEgXkPDK5F+SKLss7whg2tohnQNQwQdXit1ZjgOXkis/uft98Cv8jDWPbhwYj+VH/Aif9rx8abfjbvwVWBGeA/OnvfVvXnr1EQfdLJgMTTh+hX/FCXCqsRkQcD91MbMCxpqk8nP6jmsxJBeLrgfOxjH8RHEdSp4fF76YsRFHCi7QOwTE/6U+DpssgQ8MTWRFRat97uTfcgzKe5MOfuZHZ++5WFBgaTr1vhmSbXteGiK7dQXOk2cLxSvKkzeaiju9Jy6hoSl5oMygUVd5fNPQ94QcqTkMxZ9tQ9vPWOHwbdLRD31Ses3IBtDV+S6ehraiXf/L/e0jRUYk8IL/J543gvhOZ0hj2sQqTj9XS2hZkstZtrB2ywrJzV5ByETUU/oF9OsysyFgnaQdyduVqEPHaqXqnJvBngqqas91plyT3tSLMez3iT0s= unused-generated-by-azure'
-              }
-            ]
-          }
-        }
-        customData: frontendCloudInitAsBase64
-        adminUsername: defaultAdminUserName
-      }
-      storageProfile: {
-        osDisk: {
-          diffDiskSettings: {
-            option: 'Local'
-            placement: 'ResourceDisk'
-          }
-          caching: 'ReadOnly'
-          createOption: 'FromImage'
-        }
-        imageReference: {
-          publisher: 'Canonical'
-          offer: 'UbuntuServer'
-          sku: '18.04-LTS'
-          version: 'latest'
-        }
-      }
-      networkProfile: {
-        networkApiVersion: '2020-11-01'
-        networkInterfaceConfigurations: [
-          {
-            name: 'nic-frontend'
-            properties: {
-              primary: true
-              enableIPForwarding: false
-              enableAcceleratedNetworking: false
-              networkSecurityGroup: null
-              ipConfigurations: [
-                {
-                  name: 'default'
-                  properties: {
-                    primary: true
-                    privateIPAddressVersion: 'IPv4'
-                    publicIPAddressConfiguration: null
-                    subnet: {
-                      id: targetVirtualNetwork::snetFrontend.id
-                    }
-                    loadBalancerBackendAddressPools: [
-                      {
-                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
-                      }
-                    ]
-                    applicationGatewayBackendAddressPools: [
-                      {
-                        id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'webappBackendPool')
-                      }
-                    ]
-                    applicationSecurityGroups: [
-                      {
-                        id: asgVmssFrontend.id
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-      extensionProfile: {
-        extensions: [
-          {
-            name: 'KeyVaultForLinux'
-            properties: {
-              publisher: 'Microsoft.Azure.KeyVault'
-              type: 'KeyVaultForLinux'
-              typeHandlerVersion: '2.0'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-              settings: {
-                secretsManagementSettings: {
-                  certificateStoreLocation: '/var/lib/waagent/Microsoft.Azure.KeyVault.Store'
-                  observedCertificates: [
-                    secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
-                  ]
-                  pollingIntervalInS: '3600'
-                }
-              }
-            }
-          }
-          {
-            name: 'CustomScript'
-            properties: {
-              provisionAfterExtensions: [
-                'KeyVaultForLinux'
-              ]
-              publisher: 'Microsoft.Azure.Extensions'
-              type: 'CustomScript'
-              typeHandlerVersion: '2.1'
-              autoUpgradeMinorVersion: true
-              protectedSettings: {
-                commandToExecute: 'sh configure-nginx-frontend.sh'
-                // The following installs and configure Nginx for the frontend Linux machine, which is used as an application stand-in for this reference implementation. Using the CustomScript extension can be useful for bootstrapping VMs in leu of a larger DSC solution, but is generally not recommended for application deployment in production environments.
-                fileUris: [
-                  'https://raw.githubusercontent.com/mspnp/iaas-baseline/main/configure-nginx-frontend.sh'
-                ]
-              }
-            }
-          }
-          {
-            name: 'AzureMonitorLinuxAgent'
-            properties: {
-              publisher: 'Microsoft.Azure.Monitor'
-              type: 'AzureMonitorLinuxAgent'
-              typeHandlerVersion: '1.25'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-              settings: {
-                authentication: {
-                  managedIdentity: {
-                    'identifier-name': 'mi_res_id'
-                    'identifier-value': idVmssFrontend.id
-                  }
-                }
-              }
-            }
-          }
-          {
-            name: 'DependencyAgentLinux'
-            properties: {
-              provisionAfterExtensions: [
-                'AzureMonitorLinuxAgent'
-              ]
-              publisher: 'Microsoft.Azure.Monitoring.DependencyAgent'
-              type: 'DependencyAgentLinux'
-              typeHandlerVersion: '9.10'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-            }
-          }
-          {
-            name: 'HealthExtension'
-            properties: {
-              provisionAfterExtensions: [
-                'CustomScript'
-              ]
-              publisher: 'Microsoft.ManagedServices'
-              type: 'ApplicationHealthLinux'
-              typeHandlerVersion: '1.0'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-              settings: {
-                protocol: 'https'
-                port: 443
-                requestPath: '/favicon.ico'
-                intervalInSeconds: 5
-                numberOfProbes: 3
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-  dependsOn: [
-    gatewayModule
-    outboundLoadBalancer
-    omsVmssInsights
-    vmssFrontendSecretsUserRoleRoleAssignmentModule
-    vmssFrontendKeyVaultReaderRoleAssignmentModule
-    vmssBackend
-  ]
-}
-
-@description('The compute for backend instances; these machines are assigned to the api app team so they can deploy their workloads.')
-resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
-  name: 'vmss-backend'
-  location: location
-  zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, 3)
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${idVmssBackend.id}': {}
-    }
-  }
-  sku: {
-    name: 'Standard_E2s_v3'
-    tier: 'Standard'
-    capacity: 3
-  }
-  properties: {
-    singlePlacementGroup: false
-    additionalCapabilities: {
-      ultraSSDEnabled: false
-    }
-    orchestrationMode: 'Flexible'
-    platformFaultDomainCount: 1
-    zoneBalance: false
-    virtualMachineProfile: {
-      securityProfile: {
-        securityType: 'TrustedLaunch'
-        uefiSettings: {
-          secureBootEnabled: true
-          vTpmEnabled: true
-        }
-      }
-      diagnosticsProfile: {
-        bootDiagnostics: {
-          enabled: true
-        }
-      }
-      osProfile: {
-        computerNamePrefix: 'backend'
-        windowsConfiguration: {
-          provisionVMAgent: true
-          enableAutomaticUpdates: true
-          patchSettings: {
-            patchMode: 'AutomaticByPlatform'
-            automaticByPlatformSettings: {
-              rebootSetting: 'IfRequired'
-            }
-            assessmentMode: 'ImageDefault'
-            enableHotpatching: true
-          }
-        }
-        customData: backendCloudInitAsBase64
-        adminUsername: defaultAdminUserName
-        adminPassword: adminPassword
-        secrets: []
-        allowExtensionOperations: true
-      }
-      storageProfile: {
-        osDisk: {
-          osType: 'Windows'
-          diffDiskSettings: {
-            option: 'Local'
-            placement: 'ResourceDisk'
-          }
-          caching: 'ReadOnly'
-          createOption: 'FromImage'
-          managedDisk: {
-            storageAccountType: 'Standard_LRS'
-          }
-          deleteOption: 'Delete'
-          diskSizeGB: 30
-        }
-        imageReference: {
-          publisher: 'MicrosoftWindowsServer'
-          offer: 'WindowsServer'
-          sku: '2022-datacenter-azure-edition-core-smalldisk'
-          version: 'latest'
-          exactVersion: '20348.1668.230404'
-        }
-        dataDisks: [
-          {
-            caching: 'None'
-            createOption: 'Empty'
-            deleteOption: 'Delete'
-            diskSizeGB: 4
-            lun: 0
-            managedDisk: {
-              storageAccountType: 'Premium_LRS'
-            }
-          }
-
-        ]
-      }
-      networkProfile: {
-        networkApiVersion: '2020-11-01'
-        networkInterfaceConfigurations: [
-          {
-            name: 'nic-backend'
-            properties: {
-              deleteOption: 'Delete'
-              primary: true
-              enableIPForwarding: false
-              enableAcceleratedNetworking: false
-              networkSecurityGroup: null
-              ipConfigurations: [
-                {
-                  name: 'default'
-                  properties: {
-                    primary: true
-                    privateIPAddressVersion: 'IPv4'
-                    publicIPAddressConfiguration: null
-                    subnet: {
-                      id: targetVirtualNetwork::snetBackend.id
-                    }
-                    loadBalancerBackendAddressPools: [
-                      {
-                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', ilbName, 'apiBackendPool')
-                      }
-                      {
-                        id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
-                      }
-                    ]
-                    applicationSecurityGroups: [
-                      {
-                        id: asgVmssBackend.id
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-      extensionProfile: {
-        extensions: [
-          {
-            name: 'KeyVaultForWindows'
-            properties: {
-              publisher: 'Microsoft.Azure.KeyVault'
-              type: 'KeyVaultForWindows'
-              typeHandlerVersion: '3.0'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-              settings: {
-                secretsManagementSettings: {
-                  observedCertificates: [
-                    {
-                      certificateStoreName: 'MY'
-                      certificateStoreLocation: 'LocalMachine'
-                      keyExportable: true
-                      url: secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
-                      accounts: [
-                        'Network Service'
-                        'Local Service'
-                      ]
-                    }
-                  ]
-                  linkOnRenewal: true
-                  pollingIntervalInS: '3600'
-                }
-              }
-            }
-          }
-
-          {
-            name: 'CustomScript'
-            properties: {
-              provisionAfterExtensions: [
-                'KeyVaultForWindows'
-              ]
-              publisher: 'Microsoft.Compute'
-              type: 'CustomScriptExtension'
-              typeHandlerVersion: '1.10'
-              autoUpgradeMinorVersion: true
-              protectedSettings: {
-                commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File configure-nginx-backend.ps1'
-                // The following installs and configure Nginx for the backend Windows machine, which is used as an application stand-in for this reference implementation. Using the CustomScript extension can be useful for bootstrapping VMs in leu of a larger DSC solution, but is generally not recommended for application deployment in production environments.
-                fileUris: [
-                  'https://raw.githubusercontent.com/mspnp/iaas-baseline/main/configure-nginx-backend.ps1'
-                ]
-              }
-            }
-          }
-
-          {
-            name: 'AzureMonitorWindowsAgent'
-            properties: {
-              publisher: 'Microsoft.Azure.Monitor'
-              type: 'AzureMonitorWindowsAgent'
-              typeHandlerVersion: '1.14'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-              settings: {
-                authentication: {
-                  managedIdentity: {
-                    'identifier-name': 'mi_res_id'
-                    'identifier-value': idVmssBackend.id
-                  }
-                }
-              }
-            }
-          }
-
-          {
-            name: 'DependencyAgentWindows'
-            properties: {
-              provisionAfterExtensions: [
-                'AzureMonitorWindowsAgent'
-              ]
-              publisher: 'Microsoft.Azure.Monitoring.DependencyAgent'
-              type: 'DependencyAgentWindows'
-              typeHandlerVersion: '9.10'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-            }
-          }
-
-          {
-            name: 'ApplicationHealthWindows'
-            properties: {
-              provisionAfterExtensions: [
-                'CustomScript'
-              ]
-              publisher: 'Microsoft.ManagedServices'
-              type: 'ApplicationHealthWindows'
-              typeHandlerVersion: '1.0'
-              autoUpgradeMinorVersion: true
-              enableAutomaticUpgrade: true
-              settings: {
-                protocol: 'https'
-                port: 443
-                requestPath: '/favicon.ico'
-                intervalInSeconds: 5
-                numberOfProbes: 3
-              }
-            }
-          }
-
-          /*
-          {
-            name: 'WindowsOpenSSH'
-            properties: {
-              autoUpgradeMinorVersion: true
-              publisher: 'Microsoft.Azure.OpenSSH'
-              type: 'WindowsOpenSSH'
-              typeHandlerVersion: '3.0'
-              settings: {}
-            }
-          }
-          */
-        ]
-      }
-    }
-  }
-  dependsOn: [
-    omsVmssInsights
-    internalLoadBalancer
-    outboundLoadBalancer
-    vmssBackendSecretsUserRoleRoleAssignmentModule
-  ]
-}
-
-resource omsVmssInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
-  name: 'VMInsights(${logAnaliticsWorkspace.name})'
-  location: location
-  properties: {
-    workspaceResourceId: logAnaliticsWorkspace.id
-  }
-  plan: {
-    name: 'VMInsights(${logAnaliticsWorkspace.name})'
-    product: 'OMSGallery/VMInsights'
-    promotionCode: ''
-    publisher: 'Microsoft'
-  }
-}
 
 // Deploy a Key Vault with a private endpoint and DNS zone
 module secretsModule 'secrets.bicep' = {
@@ -654,100 +99,10 @@ module secretsModule 'secrets.bicep' = {
     location: location
     baseName: vmssName
     vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetNName
-    privateEndpointsSubnetName: targetVirtualNetwork::snetPrivatelinkendpoints.name // networkModule.outputs.privateEndpointsSubnetName
+    privateEndpointsSubnetName: 'snet-privatelinkendpoints' // networkModule.outputs.privateEndpointsSubnetName
     appGatewayListenerCertificate: appGatewayListenerCertificate
     vmssWildcardTlsPublicCertificate: vmssWildcardTlsPublicCertificate
     vmssWildcardTlsPublicAndKeyCertificates: vmssWildcardTlsPublicAndKeyCertificates
-  }
-}
-
-// Grant the Vmss Frontend managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
-module vmssFrontendSecretsUserRoleRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
-  name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultSecretsUserRole.id)
-  params: {
-    roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: idVmssFrontend.properties.principalId
-    keyVaultName: secretsModule.outputs.keyVaultName
-  }
-}
-
-// Grant the Vmss Frontend managed identity with key vault reader role permissions; this allows pulling frontend and backend certificates.
-module vmssFrontendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
-  name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultReaderRole.id)
-  params: {
-    roleDefinitionId: keyVaultReaderRole.id
-    principalId: idVmssFrontend.properties.principalId
-    keyVaultName: secretsModule.outputs.keyVaultName
-  }
-}
-
-// Grant the Vmss Frontend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
-resource laMiVmssFrontendContributorUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'mi-vm-frontent', logAnalyticsContributorUserRole.id)
-  properties: {
-    roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: idVmssFrontend.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// Grant the Vmss Backend managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
-module vmssBackendSecretsUserRoleRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
-  name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultSecretsUserRole.id)
-  params: {
-    roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: idVmssBackend.properties.principalId
-    keyVaultName: secretsModule.outputs.keyVaultName
-  }
-}
-
-// Grant the Vmss Backend managed identity with key vault reader role permissions; this allows pulling frontend and backend certificates.
-module vmssBackendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
-  name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultReaderRole.id)
-  params: {
-    roleDefinitionId: keyVaultReaderRole.id
-    principalId: idVmssBackend.properties.principalId
-    keyVaultName: secretsModule.outputs.keyVaultName
-  }
-}
-
-// Grant the Vmss Backend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
-resource laMiVmssBackendContributorUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'mi-vm-backent', logAnalyticsContributorUserRole.id)
-  properties: {
-    roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: idVmssBackend.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource pdzVmss 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: ingressDomainName
-  location: 'global'
-
-  resource vmssBackendDomainName_backend 'A' = {
-    name: vmssBackendSubdomain
-    properties: {
-      ttl: 3600
-      aRecords: [
-        {
-          ipv4Address: '10.240.4.4' // Internal Load Balancer IP address
-        }
-      ]
-    }
-  }
-
-  resource vnetlnk 'virtualNetworkLinks' = {
-    name: 'to_${targetVirtualNetwork.name}'
-    location: 'global'
-    properties: {
-      virtualNetwork: {
-        id: targetVirtualNetwork.id
-      }
-      registrationEnabled: false
-    }
   }
 }
 
@@ -756,11 +111,37 @@ module gatewayModule 'gateway.bicep' = {
   name: 'gatewayDeploy'
   params: {
     location: location
-    targetSubnetResourceId: targetVirtualNetwork::snetApplicationGateway.id //networkModule.outputs.vnetResourceId
+    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetName
+    appGatewaySubnetName: 'snet-applicationgateway' //networkModule.outputs.snetAppGwName
+    numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
+    keyVaultName: secretsModule.outputs.keyVaultName
     gatewaySSLCertSecretUri: secretsModule.outputs.gatewayCertSecretUri
     gatewayTrustedRootSSLCertSecretUri: secretsModule.outputs.gatewayTrustedRootSSLCertSecretUri
     gatewayHostName: domainName
+  }
+  dependsOn: []
+}
+
+//Deploy an Azure Application Gateway with WAF v2 and a custom domain name.
+module vmssModule 'vmss.bicep' = {
+  name: 'vmssDeploy'
+  params: {
+    location: location
+    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetName
+    vmssFrontendSubnetName: 'snet-frontend' //networkModule.outputs.vmssFrontendSubnetName
+    vmssBackendSubnetName: 'snet-backend' //networkModule.outputs.vmssBackendSubnetName
+    numberOfAvailabilityZones: numberOfAvailabilityZones
+    baseName: vmssName
+    ingressDomainName: ingressDomainName
+    frontendCloudInitAsBase64: frontendCloudInitAsBase64
+    backendCloudInitAsBase64: backendCloudInitAsBase64
+    keyVaultName: secretsModule.outputs.keyVaultName
+    vmssWorkloadPublicAndPrivatePublicCertsSecretUri: secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
+    agwName: gatewayModule.outputs.appGatewayName
+    ilbName: ilbName
+    olbName: olbName
+    adminPassword: adminPassword
   }
   dependsOn: []
 }
