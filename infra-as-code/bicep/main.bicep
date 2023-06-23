@@ -27,12 +27,14 @@ param targetVnetResourceId string
 param location string = 'eastus2'
 
 @description('The certificate data for app gateway TLS termination. It is base64 encoded')
+@secure()
 param appGatewayListenerCertificate string
 
 @description('The Base64 encoded Vmss Webserver public certificate (as .crt or .cer) to be stored in Azure Key Vault as secret and referenced by Azure Application Gateway as a trusted root certificate.')
 param vmssWildcardTlsPublicCertificate string
 
 @description('The Base64 encoded Vmss Webserver public and private certificates (formatterd as .pem or .pfx) to be stored in Azure Key Vault as secret and downloaded into the frontend and backend Vmss instances for the workloads ssl certificate configuration.')
+@secure()
 param vmssWildcardTlsPublicAndKeyCertificates string
 
 @description('Domain name to use for App Gateway and Vmss Webserver.')
@@ -277,7 +279,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
                 secretsManagementSettings: {
                   certificateStoreLocation: '/var/lib/waagent/Microsoft.Azure.KeyVault.Store'
                   observedCertificates: [
-                    kv::kvsWorkloadPublicAndPrivatePublicCerts.properties.secretUri
+                    secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
                   ]
                   pollingIntervalInS: '3600'
                 }
@@ -362,8 +364,8 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     gatewayModule
     outboundLoadBalancer
     omsVmssInsights
-    kvMiVmssFrontendSecretsUserRole_roleAssignment
-    kvMiVmssFrontendKeyVaultReader_roleAssignment
+    vmssFrontendSecretsUserRoleRoleAssignmentModule
+    vmssFrontendKeyVaultReaderRoleAssignmentModule
     vmssBackend
   ]
 }
@@ -519,7 +521,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
                       certificateStoreName: 'MY'
                       certificateStoreLocation: 'LocalMachine'
                       keyExportable: true
-                      url: kv::kvsWorkloadPublicAndPrivatePublicCerts.properties.secretUri
+                      url: secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
                       accounts: [
                         'Network Service'
                         'Local Service'
@@ -627,7 +629,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
     omsVmssInsights
     internalLoadBalancer
     outboundLoadBalancer
-    kvMiVmssBackendSecretsUserRole_roleAssignment
+    vmssBackendSecretsUserRoleRoleAssignmentModule
   ]
 }
 
@@ -645,101 +647,43 @@ resource omsVmssInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-pr
   }
 }
 
-resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
-  name: 'kv-${vmssName}'
-  location: location
-  properties: {
-    accessPolicies: [] // Azure RBAC is used instead
-    sku: {
-      family: 'A'
-      name: 'standard'
-    }
-    tenantId: subscription().tenantId
-    networkAcls: {
-      bypass: 'AzureServices' // Required for AppGW communication
-      defaultAction: 'Deny'
-      ipRules: []
-      virtualNetworkRules: []
-    }
-    enableRbacAuthorization: true
-    enabledForDeployment: false
-    enabledForDiskEncryption: false
-    enabledForTemplateDeployment: false
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 7
-    createMode: 'default'
-  }
-  dependsOn: [
-  ]
-
-  resource kvsAppGwInternalVmssWebserverTls 'secrets' = {
-    name: 'appgw-vmss-webserver-tls'
-    properties: {
-      value: vmssWildcardTlsPublicCertificate
-    }
-  }
-
-  resource kvsGatewayPublicCert 'secrets' = {
-    name: 'gateway-public-cert'
-    properties: {
-      value: appGatewayListenerCertificate
-    }
-  }
-
-  resource kvsWorkloadPublicAndPrivatePublicCerts 'secrets' = {
-    name: 'workload-public-private-cert'
-    properties: {
-      value: vmssWildcardTlsPublicAndKeyCertificates
-      contentType: 'application/x-pkcs12'
-    }
-  }
-}
-
-resource kv_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: kv
-  name: 'default'
-  properties: {
-    workspaceId: logAnaliticsWorkspace.id
-    logs: [
-      {
-        category: 'AuditEvent'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
+// Deploy a Key Vault with a private endpoint and DNS zone
+module secretsModule 'secrets.bicep' = {
+  name: 'secretsDeploy'
+  params: {
+    location: location
+    baseName: vmssName
+    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetNName
+    privateEndpointsSubnetName: targetVirtualNetwork::snetPrivatelinkendpoints.name // networkModule.outputs.privateEndpointsSubnetName
+    appGatewayListenerCertificate: appGatewayListenerCertificate
+    vmssWildcardTlsPublicCertificate: vmssWildcardTlsPublicCertificate
+    vmssWildcardTlsPublicAndKeyCertificates: vmssWildcardTlsPublicAndKeyCertificates
   }
 }
 
 // Grant the Vmss Frontend managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
-resource kvMiVmssFrontendSecretsUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
+module vmssFrontendSecretsUserRoleRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
   name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultSecretsUserRole.id)
-  properties: {
+  params: {
     roleDefinitionId: keyVaultSecretsUserRole.id
     principalId: idVmssFrontend.properties.principalId
-    principalType: 'ServicePrincipal'
+    keyVaultName: secretsModule.outputs.keyVaultName
   }
 }
 
 // Grant the Vmss Frontend managed identity with key vault reader role permissions; this allows pulling frontend and backend certificates.
-resource kvMiVmssFrontendKeyVaultReader_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
+module vmssFrontendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
   name: guid(resourceGroup().id, 'mi-vm-frontent', keyVaultReaderRole.id)
-  properties: {
+  params: {
     roleDefinitionId: keyVaultReaderRole.id
     principalId: idVmssFrontend.properties.principalId
-    principalType: 'ServicePrincipal'
+    keyVaultName: secretsModule.outputs.keyVaultName
   }
 }
 
 // Grant the Vmss Frontend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
 resource laMiVmssFrontendContributorUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
+  scope: resourceGroup()
   name: guid(resourceGroup().id, 'mi-vm-frontent', logAnalyticsContributorUserRole.id)
   properties: {
     roleDefinitionId: logAnalyticsContributorUserRole.id
@@ -749,88 +693,33 @@ resource laMiVmssFrontendContributorUserRole_roleAssignment 'Microsoft.Authoriza
 }
 
 // Grant the Vmss Backend managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
-resource kvMiVmssBackendSecretsUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
+module vmssBackendSecretsUserRoleRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
   name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultSecretsUserRole.id)
-  properties: {
+  params: {
     roleDefinitionId: keyVaultSecretsUserRole.id
     principalId: idVmssBackend.properties.principalId
-    principalType: 'ServicePrincipal'
+    keyVaultName: secretsModule.outputs.keyVaultName
   }
 }
 
 // Grant the Vmss Backend managed identity with key vault reader role permissions; this allows pulling frontend and backend certificates.
-resource kvMiVmssBackendKeyVaultReader_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
+module vmssBackendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
   name: guid(resourceGroup().id, 'mi-vm-backent', keyVaultReaderRole.id)
-  properties: {
+  params: {
     roleDefinitionId: keyVaultReaderRole.id
     principalId: idVmssBackend.properties.principalId
-    principalType: 'ServicePrincipal'
+    keyVaultName: secretsModule.outputs.keyVaultName
   }
 }
 
 // Grant the Vmss Backend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
 resource laMiVmssBackendContributorUserRole_roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: kv
+  scope: resourceGroup()
   name: guid(resourceGroup().id, 'mi-vm-backent', logAnalyticsContributorUserRole.id)
   properties: {
     roleDefinitionId: logAnalyticsContributorUserRole.id
     principalId: idVmssBackend.properties.principalId
     principalType: 'ServicePrincipal'
-  }
-}
-
-// Enabling Azure Key Vault Private Link support.
-resource pdzKv 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: 'privatelink.vaultcore.azure.net'
-  location: 'global'
-
-  // Enabling Azure Key Vault Private Link on vmss vnet.
-  resource vnetlnk 'virtualNetworkLinks' = {
-    name: 'to_${targetVirtualNetwork.name}'
-    location: 'global'
-    properties: {
-      virtualNetwork: {
-        id: targetVirtualNetwork.id
-      }
-      registrationEnabled: false
-    }
-  }
-}
-
-resource pepKv 'Microsoft.Network/privateEndpoints@2021-05-01' = {
-  name: 'pep-${kv.name}'
-  location: location
-  properties: {
-    subnet: {
-      id: targetVirtualNetwork::snetPrivatelinkendpoints.id
-    }
-    privateLinkServiceConnections: [
-      {
-        name: 'to_${targetVirtualNetwork.name}'
-        properties: {
-          privateLinkServiceId: kv.id
-          groupIds: [
-            'vault'
-          ]
-        }
-      }
-    ]
-  }
-
-  resource pdnszg 'privateDnsZoneGroups' = {
-    name: 'default'
-    properties: {
-      privateDnsZoneConfigs: [
-        {
-          name: 'privatelink-akv-net'
-          properties: {
-            privateDnsZoneId: pdzKv.id
-          }
-        }
-      ]
-    }
   }
 }
 
@@ -869,13 +758,11 @@ module gatewayModule 'gateway.bicep' = {
     location: location
     targetSubnetResourceId: targetVirtualNetwork::snetApplicationGateway.id //networkModule.outputs.vnetResourceId
     baseName: vmssName
-    gatewaySSLCertSecretUri: kv::kvsGatewayPublicCert.properties.secretUri
-    gatewayTrustedRootSSLCertSecretUri: kv::kvsAppGwInternalVmssWebserverTls.properties.secretUri
+    gatewaySSLCertSecretUri: secretsModule.outputs.gatewayCertSecretUri
+    gatewayTrustedRootSSLCertSecretUri: secretsModule.outputs.gatewayTrustedRootSSLCertSecretUri
     gatewayHostName: domainName
   }
-  dependsOn: [
-    pepKv
-  ]
+  dependsOn: []
 }
 
 resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
@@ -1025,4 +912,4 @@ resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
 }
 
 /*** OUTPUTS ***/
-output keyVaultName string = kv.name
+output keyVaultName string = secretsModule.outputs.keyVaultName
