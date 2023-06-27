@@ -56,8 +56,6 @@ param adminPassword string
 
 var subRgUniqueString = uniqueString('vmss', subscription().subscriptionId, resourceGroup().id)
 var vmssName = 'vmss-${subRgUniqueString}'
-var ilbName = 'ilb-${vmssName}'
-var olbName = 'olb-${vmssName}'
 
 var ingressDomainName = 'iaas-ingress.${domainName}'
 
@@ -77,11 +75,6 @@ resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' exi
 resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
   scope: targetResourceGroup
   name: '${last(split(targetVnetResourceId,'/'))}'
-
-  // Virtual network's subnet for the nic ilb
-  resource snetInternalLoadBalancer 'subnets' existing = {
-    name: 'snet-ilbs'
-  }
 }
 
 // Log Analytics Workspace
@@ -139,155 +132,33 @@ module vmssModule 'vmss.bicep' = {
     keyVaultName: secretsModule.outputs.keyVaultName
     vmssWorkloadPublicAndPrivatePublicCertsSecretUri: secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
     agwName: gatewayModule.outputs.appGatewayName
-    ilbName: ilbName
-    olbName: olbName
+    ilbName: internalLoadBalancerModule.outputs.ilbName
+    olbName: outboundLoadBalancerModule.outputs.olbName
     adminPassword: adminPassword
   }
   dependsOn: []
 }
 
-resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
-  name: ilbName
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  properties: {
-    frontendIPConfigurations: [
-      {
-        properties: {
-          subnet: {
-            id: targetVirtualNetwork::snetInternalLoadBalancer.id
-          }
-          privateIPAddress: '10.240.4.4'
-          privateIPAllocationMethod: 'Static'
-        }
-        name: 'ilbBackend'
-        zones: [
-          '1'
-          '2'
-          '3'
-        ]
-      }
-    ]
-    backendAddressPools: [
-      {
-        name: 'apiBackendPool'
-      }
-    ]
-    loadBalancingRules: [
-      {
-        properties: {
-          frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', ilbName, 'ilbBackend')
-          }
-          backendAddressPool: {
-            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', ilbName, 'apiBackendPool')
-          }
-          probe: {
-            id: resourceId('Microsoft.Network/loadBalancers/probes', ilbName, 'ilbprobe')
-          }
-          protocol: 'Tcp'
-          frontendPort: 443
-          backendPort: 443
-          idleTimeoutInMinutes: 15
-        }
-        name: 'ilbrule'
-      }
-    ]
-    probes: [
-      {
-        properties: {
-          protocol: 'Tcp'
-          port: 80
-          intervalInSeconds: 15
-          numberOfProbes: 2
-        }
-        name: 'ilbprobe'
-      }
-    ]
+//Deploy an Azure Internal Load Balancer.
+module internalLoadBalancerModule 'internalloadbalancer.bicep' = {
+  name: 'internalLoadBalancerDeploy'
+  params: {
+    location: location
+    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetName
+    internalLoadBalancerSubnetName: 'snet-ilbs' //networkModule.outputs.snetInternalLoadBalancerName
+    numberOfAvailabilityZones: numberOfAvailabilityZones
+    baseName: vmssName
   }
   dependsOn: []
 }
 
-var numOutboundLoadBalancerIpAddressesToAssign = 3
-resource pipsOutboundLoadbalanacer 'Microsoft.Network/publicIPAddresses@2021-05-01' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
-  name: 'pip-olb-${location}-${padLeft(i, 2, '0')}'
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  zones: [
-    '1'
-    '2'
-    '3'
-  ]
-  properties: {
-    publicIPAllocationMethod: 'Static'
-    idleTimeoutInMinutes: 4
-    publicIPAddressVersion: 'IPv4'
-  }
-}]
-
-resource pipsOutboundLoadbalanacer_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
-  name: 'default'
-  scope: pipsOutboundLoadbalanacer[i]
-  properties: {
-    workspaceId: logAnaliticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'audit'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
-  }
-}]
-
-resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
-  name: olbName
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  properties: {
-    frontendIPConfigurations: [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
-        name: pipsOutboundLoadbalanacer[i].name
-        properties: {
-          publicIPAddress: {
-            id: pipsOutboundLoadbalanacer[i].id
-          }
-        }
-    }]
-    backendAddressPools: [
-      {
-        name: 'outboundBackendPool'
-      }
-    ]
-    outboundRules: [
-      {
-        properties: {
-          allocatedOutboundPorts: 16000 // this value must be the total number of available ports divided the amount of vms (e.g. 64000*3/6, where 64000 is the amount of port, 3 the selected number of ips and 6 the numbers of vms)
-          enableTcpReset: true
-          protocol: 'Tcp'
-          idleTimeoutInMinutes: 15
-          frontendIPConfigurations: [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
-              id: resourceId('Microsoft.Network/loadBalancers/frontendIpConfigurations', olbName, pipsOutboundLoadbalanacer[i].name)
-          }]
-          backendAddressPool: {
-            id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', olbName, 'outboundBackendPool')
-          }
-        }
-        name: 'olbrule'
-      }
-    ]
-    loadBalancingRules: []
-    probes: []
+//Deploy an Azure Outbound Load Balancer.
+module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
+  name: 'outboundLoadBalancerDeploy'
+  params: {
+    location: location
+    numberOfAvailabilityZones: numberOfAvailabilityZones
+    baseName: vmssName
   }
   dependsOn: []
 }
