@@ -2,10 +2,6 @@ targetScope = 'resourceGroup'
 
 /*** PARAMETERS ***/
 
-@description('The regional network VNet Resource ID that will host the VM\'s NIC')
-@minLength(79)
-param targetVnetResourceId string
-
 @description('IaaS region. This needs to be the same region as the vnet provided in these parameters.')
 @allowed([
   'australiaeast'
@@ -65,25 +61,21 @@ var numberOfAvailabilityZones = 3
 
 /*** EXISTING RESOURCES ***/
 
-// resource group
-resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
-  scope: subscription()
-  name: '${split(targetVnetResourceId,'/')[4]}'
-}
-
-// Virtual network
-resource targetVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
-  scope: targetResourceGroup
-  name: '${last(split(targetVnetResourceId,'/'))}'
-}
-
 // Log Analytics Workspace
-resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: targetResourceGroup
-  name: 'log-${location}'
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  scope: resourceGroup()
+  name: networkingModule.outputs.logAnalyticsWorkspaceName
 }
 
 /*** RESOURCES ***/
+
+// Deploy a vnet and subnets for the vmss, appgateway, load balancers and bastion
+module networkingModule 'networking.bicep' = {
+  name: 'networkingDeploy'
+  params: {
+    location: location
+  }
+}
 
 // Deploy a Key Vault with a private endpoint and DNS zone
 module secretsModule 'secrets.bicep' = {
@@ -91,8 +83,8 @@ module secretsModule 'secrets.bicep' = {
   params: {
     location: location
     baseName: vmssName
-    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetNName
-    privateEndpointsSubnetName: 'snet-privatelinkendpoints' // networkModule.outputs.privateEndpointsSubnetName
+    vnetName: networkingModule.outputs.vnetName
+    privateEndpointsSubnetName: networkingModule.outputs.privateEndpointsSubnetName
     appGatewayListenerCertificate: appGatewayListenerCertificate
     vmssWildcardTlsPublicCertificate: vmssWildcardTlsPublicCertificate
     vmssWildcardTlsPublicAndKeyCertificates: vmssWildcardTlsPublicAndKeyCertificates
@@ -104,8 +96,8 @@ module gatewayModule 'gateway.bicep' = {
   name: 'gatewayDeploy'
   params: {
     location: location
-    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetName
-    appGatewaySubnetName: 'snet-applicationgateway' //networkModule.outputs.snetAppGwName
+    vnetName: networkingModule.outputs.vnetName
+    appGatewaySubnetName: networkingModule.outputs.appGatewaySubnetName
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
     keyVaultName: secretsModule.outputs.keyVaultName
@@ -121,9 +113,9 @@ module vmssModule 'vmss.bicep' = {
   name: 'vmssDeploy'
   params: {
     location: location
-    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetName
-    vmssFrontendSubnetName: 'snet-frontend' //networkModule.outputs.vmssFrontendSubnetName
-    vmssBackendSubnetName: 'snet-backend' //networkModule.outputs.vmssBackendSubnetName
+    vnetName: networkingModule.outputs.vnetName
+    vmssFrontendSubnetName: networkingModule.outputs.vmssFrontendSubnetName
+    vmssBackendSubnetName: networkingModule.outputs.vmssBackendSubnetName
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
     ingressDomainName: ingressDomainName
@@ -144,8 +136,8 @@ module internalLoadBalancerModule 'internalloadbalancer.bicep' = {
   name: 'internalLoadBalancerDeploy'
   params: {
     location: location
-    vnetName: targetVirtualNetwork.name //networkModule.outputs.vnetName
-    internalLoadBalancerSubnetName: 'snet-ilbs' //networkModule.outputs.snetInternalLoadBalancerName
+    vnetName: networkingModule.outputs.vnetName
+    internalLoadBalancerSubnetName: networkingModule.outputs.internalLoadBalancerSubnetName
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
   }
@@ -165,3 +157,5 @@ module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
 
 /*** OUTPUTS ***/
 output keyVaultName string = secretsModule.outputs.keyVaultName
+output appGwPublicIpAddress string = networkingModule.outputs.appGwPublicIpAddress
+output bastionHostName string = networkingModule.outputs.bastionHostName
