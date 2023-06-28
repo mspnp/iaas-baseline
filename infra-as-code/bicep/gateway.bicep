@@ -34,13 +34,17 @@ param gatewayHostName string
 @description('The Azure KeyVault where app gw secrets are stored.')
 param keyVaultName string
 
+@description('The backend domain name.')
+param ingressDomainName string
+
 /*** VARIABLES ***/
 
 var agwName = 'agw-${baseName}'
 
-/*** EXISTING SUBSCRIPTION RESOURCES ***/
+var vmssFrontendSubdomain = 'frontend'
+var vmssFrontendDomainName = '${vmssFrontendSubdomain}.${ingressDomainName}'
 
-/*** EXISTING RESOURCES ***/
+/*** EXISTING SUBSCRIPTION RESOURCES ***/
 
 // Built-in Azure RBAC role that is applied a Key Vault to grant with metadata, certificates, keys and secrets read privileges.  Granted to App Gateway's managed identity.
 resource keyVaultReaderRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
@@ -53,6 +57,8 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2018-0
   name: '4633458b-17de-408a-b874-0445c86b69e6'
   scope: subscription()
 }
+
+/*** EXISTING RESOURCES ***/
 
 // The target virtual network
 resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
@@ -221,7 +227,7 @@ resource appGateway 'Microsoft.Network/applicationGateways@2021-05-01' = {
           port: 443
           protocol: 'Https'
           cookieBasedAffinity: 'Disabled'
-          hostName: gatewayHostName
+          hostName: vmssFrontendDomainName
           pickHostNameFromBackendAddress: false
           requestTimeout: 20
           probe: {

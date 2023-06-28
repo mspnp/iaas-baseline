@@ -104,6 +104,7 @@ module gatewayModule 'gateway.bicep' = {
     gatewaySSLCertSecretUri: secretsModule.outputs.gatewayCertSecretUri
     gatewayTrustedRootSSLCertSecretUri: secretsModule.outputs.gatewayTrustedRootSSLCertSecretUri
     gatewayHostName: domainName
+    ingressDomainName: ingressDomainName
   }
   dependsOn: []
 }
