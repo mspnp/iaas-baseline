@@ -6,6 +6,8 @@
   you can't use this approach in the same Bicep file that defines the managed identity. This sample uses a Bicep module to work around this issue.
 */
 
+/*** PARAMETERS ***/
+
 @description('The Id of the role definition.')
 param roleDefinitionId string
 
@@ -15,10 +17,18 @@ param principalId string
 @description('The name of the key vault resource.')
 param keyVaultName string
 
+/*** VARIABLES ***/
+
+/*** EXISTING SUBSCRIPTION RESOURCES ***/
+
+/*** EXISTING RESOURCES ***/
+
 // ---- Existing resources ----
 resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' existing = {
   name: keyVaultName
 }
+
+/*** RESOURCES ***/
 
 // ---- Role assignment ----
 resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -30,3 +40,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalType: 'ServicePrincipal'
   }
 }
+
+/*** OUTPUTS ***/

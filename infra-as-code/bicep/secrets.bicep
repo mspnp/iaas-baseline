@@ -44,7 +44,7 @@ var keyVaultDnsZoneName = 'privatelink.vaultcore.azure.net' //Cannot use 'privat
 resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
   name: vnetName
 
-  // Virtual network's subnet for all private endpoints
+  // Virtual network's subnet for all private endpoints NICs
   resource privateEndpointsSubnet 'subnets' existing = {
     name: privateEndpointsSubnetName
   }
