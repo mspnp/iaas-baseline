@@ -281,22 +281,10 @@ This is the heart of the guidance in this reference implementation. Here you wil
    sed -i "s:YOUR_SSH-RSA_HERE:${SSH_PUBLIC}:" ./frontendCloudInit.yml
    ```
 
-1. Modify the `backendCloudInit.yml` to change the public key
-
-   ```bash
-   sed -i "s:YOUR_SSH-RSA_HERE:${SSH_PUBLIC}:" ./backendCloudInit.yml
-   ```
-
 1. Convert your front end cloud-init (users) file to Base64.
 
    ```bash
    FRONTEND_CLOUDINIT_BASE64=$(base64 frontendCloudInit.yml | tr -d '\n')
-   ```
-
-1. Convert your api cloud-init (users) file to Base64.
-
-   ```bash
-   BACKEND_CLOUDINIT_BASE64=$(base64 backendCloudInit.yml | tr -d '\n')
    ```
 
 1. Deploy the compute infrastructure stamp ARM template.
@@ -304,7 +292,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 
    ```bash
    # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f infras-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   az deployment group create -g rg-iaas -f infras-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
    ```
 
    The deployment creation will emit the following:
@@ -312,6 +300,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
      * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
      * `bastionHostName` - The name of your Azure Bastion Host instance that will be used for remoting your vms.
      * `keyVaultName` - The name of your Azure KeyVault instance that stores all your TLS certs.
+     * `backendAdminUserName` - The Azure backend VMs admin user name that will be used to validate connectivity with your VMs.
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./infra-as-a-code/bicep/parameters.json) file and deployed as above, using `-p "@./infra-as-a-code/bicep/parameters.json"` instead of providing the individual key-value pairs.
 
@@ -394,13 +383,18 @@ This is the heart of the guidance in this reference implementation. Here you wil
    exit
    ```
 
-1. Remote to a Windows backend VM using Bastion
+1. Get the backend admin user name.
 
    ```bash
-   az network bastion rdp -n $AB_NAME -g rg-iaas --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   BACKEND_ADMINUSERNAME=$(az deployment group show -g rg-iaas -n main --query properties.outputs.backendAdminUserName.value -o tsv)
+   echo BACKEND_ADMINUSERNAME: $BACKEND_ADMINUSERNAME
    ```
 
-   :warning: the bastion rdp command will work from Windows machines. Other platforms might need to remote your VM Windows machines from [Azure portal using Bastion](https://learn.microsoft.com/azure/bastion/bastion-overview)
+1. Remote ssh using Bastion into a backend VM
+
+   ```bash
+   az network bastion ssh -n $AB_NAME -g rg-iaas --username $BACKEND_ADMINUSERNAME --auth-typ password --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   ```
 
 1. Validate your backend workload (another Nginx instance) is running in the backend
 
@@ -408,7 +402,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    curl http://127.0.0.1
    ```
 
-1. Exit the RDP session from the backend VM
+1. Exit the ssh session from the backend VM
 
    ```bash
    exit

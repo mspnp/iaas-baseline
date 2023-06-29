@@ -40,10 +40,6 @@ param domainName string = 'contoso.com'
 @minLength(100)
 param frontendCloudInitAsBase64 string
 
-@description('A cloud init file (starting with #cloud-config) as a base 64 encoded string used to perform image customization on the jump box VMs. Used for user-management in this context.')
-@minLength(100)
-param backendCloudInitAsBase64 string
-
 @description('The admin passwork for the Windows backend machines.')
 @secure()
 param adminPassword string
@@ -115,7 +111,6 @@ module vmssModule 'vmss.bicep' = {
     baseName: vmssName
     ingressDomainName: ingressDomainName
     frontendCloudInitAsBase64: frontendCloudInitAsBase64
-    backendCloudInitAsBase64: backendCloudInitAsBase64
     keyVaultName: secretsModule.outputs.keyVaultName
     vmssWorkloadPublicAndPrivatePublicCertsSecretUri: secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
     agwName: gatewayModule.outputs.appGatewayName
@@ -158,3 +153,4 @@ module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
 output keyVaultName string = secretsModule.outputs.keyVaultName
 output appGwPublicIpAddress string = networkingModule.outputs.appGwPublicIpAddress
 output bastionHostName string = networkingModule.outputs.bastionHostName
+output backendAdminUserName string = vmssModule.outputs.backendAdminUserName

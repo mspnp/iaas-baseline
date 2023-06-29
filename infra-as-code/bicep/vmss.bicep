@@ -32,10 +32,6 @@ param ingressDomainName string
 @minLength(100)
 param frontendCloudInitAsBase64 string
 
-@description('A cloud init file (starting with #cloud-config) as a base 64 encoded string used to perform image customization on the jump box VMs. Used for user-management in this context.')
-@minLength(100)
-param backendCloudInitAsBase64 string
-
 @description('The Azure KeyVault secret uri for the frontend and backendpool wildcard TLS public and key certificate.')
 param vmssWorkloadPublicAndPrivatePublicCertsSecretUri string
 
@@ -510,7 +506,6 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
             enableHotpatching: true
           }
         }
-        customData: backendCloudInitAsBase64
         adminUsername: defaultAdminUserName
         adminPassword: adminPassword
         secrets: []
@@ -697,19 +692,6 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
               }
             }
           }
-
-          /*
-          {
-            name: 'WindowsOpenSSH'
-            properties: {
-              autoUpgradeMinorVersion: true
-              publisher: 'Microsoft.Azure.OpenSSH'
-              type: 'WindowsOpenSSH'
-              typeHandlerVersion: '3.0'
-              settings: {}
-            }
-          }
-          */
         ]
       }
     }
@@ -737,3 +719,4 @@ resource omsVmssInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-pr
 }
 
 /*** OUTPUTS ***/
+output backendAdminUserName string = defaultAdminUserName
