@@ -354,6 +354,20 @@ resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecuri
   }
 }
 
+resource vmssFrontendSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vmssFrontendSubnetNetworkSecurityGroup
+  name: 'default'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+  }
+}
+
 // Default NSG on the vmss backend. Feel free to constrict further.
 resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
   name: 'nsg-${vnetName}-backend'
@@ -459,20 +473,6 @@ resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurit
           priority: 1000
           direction: 'Outbound'
         }
-      }
-    ]
-  }
-}
-
-resource vmssFrontendSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: vmssFrontendSubnetNetworkSecurityGroup
-  name: 'default'
-  properties: {
-    workspaceId: logAnalyticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
       }
     ]
   }
@@ -719,6 +719,20 @@ resource privateLinkEndpointsSubnetNetworkSecurityGroup 'Microsoft.Network/netwo
   }
 }
 
+resource privateLinkEndpointsSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: privateLinkEndpointsSubnetNetworkSecurityGroup
+  name: 'default'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+  }
+}
+
 // NSG on the Deployment Agent subnet.
 resource deploymentAgentSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
   name: 'nsg-${vnetName}-deploymentagent'
@@ -763,20 +777,6 @@ resource deploymentAgentSubnetNetworkSecurityGroup 'Microsoft.Network/networkSec
           priority: 1000
           direction: 'Outbound'
         }
-      }
-    ]
-  }
-}
-
-resource privateLinkEndpointsSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: privateLinkEndpointsSubnetNetworkSecurityGroup
-  name: 'default'
-  properties: {
-    workspaceId: logAnalyticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
       }
     ]
   }
@@ -899,6 +899,20 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
 
 }
 
+resource vnetDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vnet
+  name: 'default'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
 @description('The public IP for the regional hub\'s Azure Bastion service.')
 resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
   name: 'pip-ab-${location}'
@@ -968,20 +982,6 @@ resource bastionHostDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@20
     logs: [
       {
         category: 'BastionAuditLogs'
-        enabled: true
-      }
-    ]
-  }
-}
-
-resource vnetDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: vnet
-  name: 'default'
-  properties: {
-    workspaceId: logAnalyticsWorkspace.id
-    metrics: [
-      {
-        category: 'AllMetrics'
         enabled: true
       }
     ]
