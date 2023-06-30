@@ -61,12 +61,6 @@ var numberOfAvailabilityZones = 3
 
 /*** EXISTING RESOURCES ***/
 
-// Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
-  name: networkingModule.outputs.logAnalyticsWorkspaceName
-}
-
 /*** RESOURCES ***/
 
 // Deploy a vnet and subnets for the vmss, appgateway, load balancers and bastion
@@ -127,7 +121,10 @@ module vmssModule 'vmss.bicep' = {
     agwName: gatewayModule.outputs.appGatewayName
     ilbName: internalLoadBalancerModule.outputs.ilbName
     olbName: outboundLoadBalancerModule.outputs.olbName
+    logAnalyticsWorkspaceName: networkingModule.outputs.logAnalyticsWorkspaceName
     adminPassword: adminPassword
+    vmssFrontendApplicationSecurityGroupName: networkingModule.outputs.vmssFrontendApplicationSecurityGroupName
+    vmssBackendApplicationSecurityGroupName: networkingModule.outputs.vmssBackendApplicationSecurityGroupName
   }
   dependsOn: []
 }
@@ -152,6 +149,7 @@ module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
     location: location
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
+    logAnalyticsWorkspaceName: networkingModule.outputs.logAnalyticsWorkspaceName
   }
   dependsOn: []
 }

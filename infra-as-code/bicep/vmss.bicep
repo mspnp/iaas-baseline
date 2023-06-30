@@ -51,9 +51,18 @@ param ilbName string
 @description('The Azure Outbound Load Balancer name.')
 param olbName string
 
+@description('The Azure Log Analytics Workspace name.')
+param logAnalyticsWorkspaceName string
+
 @description('The admin passwork for the Windows backend machines.')
 @secure()
 param adminPassword string
+
+@description('The name of the frontend Application Security Group.')
+param vmssFrontendApplicationSecurityGroupName string
+
+@description('The name of the backend Application Security Group.')
+param vmssBackendApplicationSecurityGroupName string
 
 /*** VARIABLES ***/
 
@@ -91,9 +100,9 @@ resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' exi
 /*** EXISTING RESOURCES ***/
 
 // Log Analytics Workspace
-resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
   scope: targetResourceGroup
-  name: 'log-${location}'
+  name: logAnalyticsWorkspaceName
 }
 
 // The target virtual network
@@ -115,13 +124,13 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
 // Default ASG on the vmss frontend. Feel free to constrict further.
 resource vmssFrontendApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-07-01' existing = {
   scope: targetResourceGroup
-  name: 'asg-frontend'
+  name: vmssFrontendApplicationSecurityGroupName
 }
 
 // Default ASG on the vmss backend. Feel free to constrict further.
 resource vmssBackendApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-07-01' existing = {
   scope: targetResourceGroup
-  name: 'asg-backend'
+  name: vmssBackendApplicationSecurityGroupName
 }
 
 resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' existing = {
@@ -714,13 +723,13 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
 }
 
 resource omsVmssInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
-  name: 'VMInsights(${logAnaliticsWorkspace.name})'
+  name: 'VMInsights(${logAnalyticsWorkspace.name})'
   location: location
   properties: {
-    workspaceResourceId: logAnaliticsWorkspace.id
+    workspaceResourceId: logAnalyticsWorkspace.id
   }
   plan: {
-    name: 'VMInsights(${logAnaliticsWorkspace.name})'
+    name: 'VMInsights(${logAnalyticsWorkspace.name})'
     product: 'OMSGallery/VMInsights'
     promotionCode: ''
     publisher: 'Microsoft'

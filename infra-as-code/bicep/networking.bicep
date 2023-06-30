@@ -1042,3 +1042,6 @@ output vmssBackendSubnetName string = vnet::vmssBackendSubnet.name
 output internalLoadBalancerSubnetName string = vnet::internalLoadBalancerSubnet.name
 
 output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
+
+output vmssFrontendApplicationSecurityGroupName string = vmssFrontendApplicationSecurityGroup.name
+output vmssBackendApplicationSecurityGroupName string = vmssBackendApplicationSecurityGroup.name

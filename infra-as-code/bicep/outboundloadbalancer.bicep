@@ -16,6 +16,9 @@ param baseName string
 @description('The resource group name where the AppGw is going to be deployed.')
 param resourceGroupName string = resourceGroup().name
 
+@description('The Azure Log Analytics Workspace name.')
+param logAnalyticsWorkspaceName string
+
 /*** VARIABLES ***/
 
 var olbName = 'olb-${baseName}'
@@ -30,9 +33,9 @@ resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' exi
 /*** EXISTING RESOURCES ***/
 
 // Log Analytics Workspace
-resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
   scope: targetResourceGroup
-  name: 'log-${location}'
+  name: logAnalyticsWorkspaceName
 }
 
 /*** RESOURCES ***/
@@ -56,7 +59,7 @@ resource pipsOutboundLoadbalanacer_diagnosticSetting 'Microsoft.Insights/diagnos
   name: 'default'
   scope: pipsOutboundLoadbalanacer[i]
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
