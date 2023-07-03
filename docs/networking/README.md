@@ -6,9 +6,9 @@ These files are the Bicep templates used in the deployment of this reference imp
 
 ## Files
 
-* [`vnet.bicep`](./vnet.bicep) is a file that defines a specific spoke in the topology. A spoke, in our narrative, is create for each workload in a business unit, hence the naming pattern in the file name.
+* [`networking.bicep`](../infra-as-code/bicep/networking.bicep) is a file that defines a specific vnet. A vnet is created for each workload.
 
-Your organization will likely have its own standards for their hub-spoke implementation. Be sure to follow your organizational guidelines.
+Your organization will likely have its own standards and typically implement a hub-spoke topology. For the sake of simplicity, in this reference implementation we deploy a single vnet. Be sure to follow your organizational guidelines.
 
 ## Topology details
 

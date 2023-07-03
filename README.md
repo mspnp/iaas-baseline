@@ -16,7 +16,7 @@ The implementation presented here is the _minimum recommended baseline. This imp
 
 The material here is relatively dense. We strongly encourage you to dedicate time to walk through these instructions, with a mind to learning. We do NOT provide any "one click" deployment here. However, once you've understood the components involved and identified the shared responsibilities between your team and your great organization, it is encouraged that you build suitable, auditable deployment processes around your final infrastructure.
 
-Throughout the reference implementation, you will see reference to _Contoso_. Contoso is a fictional fast-growing startup that provides online web services to its clientele on the west coast of North America. The company has on-premise data centers and all their line of business applications are now about to be orchestrated by secure, enterprise-ready Infrastructure as a Service using Virtual Machine Scale Sets. You can read more about [their requirements and their IT team composition](./contoso/README.md). This narrative provides grounding for some implementation details, naming conventions, etc. You should adapt as you see fit.
+Throughout the reference implementation, you will see reference to _Contoso_. Contoso is a fictional fast-growing startup that provides online web services to its clientele on the west coast of North America. The company has on-premise data centers and all their line of business applications are now about to be orchestrated by secure, enterprise-ready Infrastructure as a Service using Virtual Machine Scale Sets. You can read more about [their requirements and their IT team composition](./docs/contoso/README.md). This narrative provides grounding for some implementation details, naming conventions, etc. You should adapt as you see fit.
 
 Finally, this implementation uses [Nginx](https://nginx.org) as an example workload in the the frontend and backend VMs. This workload is purposefully uninteresting, as it is here exclusively to help you experience the baseline infrastructure.
 
@@ -73,7 +73,7 @@ There are considerations that must be addressed before you start deploying your 
    > * [User Access Administrator role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#user-access-administrator) is _required_ at the subscription level since you'll be performing role assignments to managed identities across various resource groups.
    > * [Resource Policy Contributor role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#resource-policy-contributor) is _required_ at the subscription level since you'll be creating custom Azure policy definitions to govern resources in your compute.
 
-1. An Azure AD tenant to associate your compute authentication to.
+1. An admin user in an Azure AD tenant.
 
    > :warning: The user or service principal initiating the deployment process _must_ have the following minimal set of Azure AD permissions assigned:
    >
@@ -226,9 +226,7 @@ There are considerations that must be addressed before you start deploying your 
 
    :bulb: If you are using a single tenant for this walk-through, the compute deployment step later will take care of the necessary role assignments for the groups created above. Specifically, in the above steps, you created the the Azure AD security group `iaas-admins` is going to contain compute admins. Those group Object IDs will be associated to the 'Virtual Machine Administrator Login' [RBAC role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#virtual-machine-administrator-login). Using Azure RBAC as your authorization approach is ultimately preferred as it allows for the unified management and access control across Azure Resources, VMs, and VM resources. At the time of this writing there are ten [Azure RBAC roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#compute) that represent typical compute access patterns.
 
-### 2. Build target network
-
-Microsoft recommends VMs be deploy into a carefully planned network; sized appropriately for your needs and with proper network observability. Organizations typically favor a traditional hub-spoke model, which is reflected from derivatives of this implementation such as landing zones.
+### 2. Create the resoure group
 
 The following two resource groups will be created and populated with networking resources in the steps below.
 
@@ -253,24 +251,11 @@ The following two resource groups will be created and populated with networking 
    az group create -n rg-iaas -l centralus
    ```
 
-1. Create the spoke that will be home to the compute and its adjacent resources.
+### 3. Build the target network and deploy VMs
 
-   > :book: The networking team receives a request from an app team in business unit (BU) 0001 for a network spoke to house their new VM-based application (Internally know as Application ID: A0008). The network team talks with the app team to understand their requirements and aligns those needs with Microsoft's best practices for a general-purpose compute deployment. They capture those specific requirements and deploy the spoke.
+Microsoft recommends VMs be deployed into a carefully planned network; sized appropriately for your needs and with proper network observability. Organizations typically favor a traditional hub-spoke model, which is reflected from derivatives of this implementation such as landing zones.
 
-   ```bash
-   # [This takes about four minutes to run.]
-   az deployment group create -g rg-iaas -f networking/vnet.bicep -p location=eastus2
-   ```
-
-   The spoke creation will emit the following:
-
-     * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
-     * `vnetResourceId` - The resource ID of the Virtual network where the VMs, App Gateway, and related resources will be deployed. E.g. `/subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00`
-     * `vmssSubnetResourceIds` - The resource IDs of the Virtual network subnets for the VMs. E.g. `[ /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-frontend, /subscriptions/[id]/resourceGroups/rg-iaas/providers/Microsoft.Network/virtualNetworks/vnet-vnet-00/subnet/snet-backend ]`
-
-### 3. Deploying the VMs and Workload
-
-This is the heart of the guidance in this reference implementation; paired with prior network topology guidance. Here you will deploy the Azure resources for your compute and the adjacent services such as Azure Application Gateway WAF, Azure Monitor, and Azure Key Vault. This is also where you will validate the VMs are bootstrapped.
+This is the heart of the guidance in this reference implementation. Here you will deploy the Azure resources for your netorking, compute and the adjacent services such as Azure Application Gateway WAF, Azure Monitor, and Azure Key Vault. This is also where you will validate the VMs are bootstrapped.
 
 1. Generate new VM authentication ssh keys by following the instructions from [Create and manage SSH keys for authentication to a Linux VM in Azure](https://learn.microsoft.com/azure/virtual-machines/linux/create-ssh-keys-detailed). Alternatively, quickly execute the following command:
 
@@ -314,33 +299,30 @@ This is the heart of the guidance in this reference implementation; paired with 
    BACKEND_CLOUDINIT_BASE64=$(base64 backendCloudInit.yml | tr -d '\n')
    ```
 
-1. Get the spoke virtual network resource ID.
-
-   > :book: The app team will be deploying to a spoke virtual network, that was already provisioned by the network team.
-
-   ```bash
-   export RESOURCEID_VNET_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.vnetResourceId.value -o tsv)
-   echo RESOURCEID_VNET_IAAS_BASELINE: $RESOURCEID_VNET_IAAS_BASELINE
-   ```
-
 1. Deploy the compute infrastructure stamp ARM template.
   :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
    # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f vmss-stamp.bicep -p targetVnetResourceId=${RESOURCEID_VNET_IAAS_BASELINE} location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   az deployment group create -g rg-iaas -f infras-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" backendCloudInitAsBase64="${BACKEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
    ```
 
-   > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./azuredeploy.parameters.prod.json) file and deployed as above, using `-p "@azuredeploy.parameters.prod.json"` instead of providing the individual key-value pairs.
+   The deployment creation will emit the following:
+
+     * `appGwPublicIpAddress` - The Public IP address of the Azure Application Gateway (WAF) that will receive traffic for your workload.
+     * `bastionHostName` - The name of your Azure Bastion Host instance that will be used for remoting your vms.
+     * `keyVaultName` - The name of your Azure KeyVault instance that stores all your TLS certs.
+
+   > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./infra-as-a-code/bicep/parameters.json) file and deployed as above, using `-p "@./infra-as-a-code/bicep/parameters.json"` instead of providing the individual key-value pairs.
 
 1. Check all your recently created VMs at the rg-iaas resources group are in `running` power state
 
    ```bash
-   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeDB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" -o table
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" -o table
    ````
 
    ```output
-   1-Zone    2-Name                     3-VMSize         4-OSType    5-OSDiskSizeGB    6-DataDiskType    7-DataDiskSizeDB    8-PowerState
+   1-Zone    2-Name                     3-VMSize         4-OSType    5-OSDiskSizeGB    6-DataDiskType    7-DataDiskSizeGB    8-PowerState
    --------  -------------------------  ---------------  ----------  ----------------  ----------------  ------------------  ------------------
    1         vmss-frontend-00_e49497b3  Standard_D4s_v3  Linux       30                                                      PowerState/running
    1         vmss-backend-00_c454e7bb   Standard_E2s_v3  Windows     30                Premium_LRS       4                   PowerState/running
@@ -355,7 +337,7 @@ This is the heart of the guidance in this reference implementation; paired with 
 1. Validate all your VMs have been able to sucessfully install all the desired VM extensions
 
    ```bash
-   az graph query -q "Resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( Resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" -o table --query "[].[Name: VMName, ComputerName, Extensions[]]"
+    az graph query -q "Resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( Resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query '[].[VMName, ComputerName, Extensions[]]' -o table
    ```
 
    ```output
@@ -371,19 +353,26 @@ This is the heart of the guidance in this reference implementation; paired with 
 
    :bulb: From some of the extension names in `Column3` you can easily spot that the backend VMs are `Windows` machines and the frontend VMs are `Linux` machines. For more information about the VM extensions please take a look at https://learn.microsoft.com/azure/virtual-machines/extensions/overview
 
-1. Query Application Heath Extension substatus and see whether your application is healthy
+1. Query Heath Extension substatus for your Frontend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view --resource-group rg-iaas --name <VMNAME> --query "[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
+   az vm get-instance-view --resource-group rg-iaas --name <Frontend-VMNAME> --query "[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
+1. Query Application Heath Windows Extension substatus for your Backend VMs and see whether your application is healthy
+
+   ```bash
+   az vm get-instance-view --resource-group rg-iaas --name <Backend-VMNAME> --query "[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
+   ```
+
+   :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
 1. Get the Azure Bastion name.
 
    ```bash
-   AB_NAME=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.bastionHostName.value -o tsv)
+   AB_NAME=$(az deployment group show -g rg-iaas -n main --query properties.outputs.bastionHostName.value -o tsv)
    echo AB_NAME: $AB_NAME
    ```
 
@@ -440,7 +429,7 @@ This section will help you to validate the workload is exposed correctly and res
 
    ```bash
    # query the Azure Application Gateway Public Ip
-   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n vnet --query properties.outputs.appGwPublicIpAddress.value -o tsv)
+   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n main --query properties.outputs.appGwPublicIpAddress.value -o tsv)
    echo APPGW_PUBLIC_IP: $APPGW_PUBLIC_IP
    ```
 
@@ -508,7 +497,7 @@ Most of the Azure resources deployed in the prior steps will incur ongoing charg
 1. Obtain the Azure KeyVault resource name
 
    ```bash
-   export KEYVAULT_NAME_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n vmss-stamp --query properties.outputs.keyVaultName.value -o tsv)
+   export KEYVAULT_NAME_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n mmain --query properties.outputs.keyVaultName.value -o tsv)
    echo KEYVAULT_NAME_IAAS_BASELINE: $KEYVAULT_NAME_IAAS_BASELINE
    ```
 

@@ -24,12 +24,12 @@ param location string
 
 /*** VARIABLES ***/
 // A designator that represents a business unit id and application id
-var clusterVNetName = 'vnet'
+var vnetName = 'vnet'
 
 /*** RESOURCES ***/
 
 // This Log Analytics workspace stores logs from the regional spokes network, and bastion.
-resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
   name: 'log-${location}'
   location: location
   properties: {
@@ -50,11 +50,11 @@ resource logAnaliticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06
   }
 }
 
-resource logAnaliticsWorkspace_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource logAnalyticsWorkspaceDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'default'
-  scope:logAnaliticsWorkspace
+  scope:logAnalyticsWorkspace
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
@@ -71,7 +71,7 @@ resource logAnaliticsWorkspace_diagnosticsSettings 'Microsoft.Insights/diagnosti
 }
 
 // NSG around the Azure Bastion Subnet.
-resource nsgBastionSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource bastionSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
   name: 'nsg-${location}-bastion'
   location: location
   properties: {
@@ -240,11 +240,11 @@ resource nsgBastionSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' =
   }
 }
 
-resource nsgBastionSubnet_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: nsgBastionSubnet
+resource bastionSubnetNetworkSecurityGroupDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: bastionSubnetNetworkSecurityGroup
   name: 'default'
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -255,20 +255,20 @@ resource nsgBastionSubnet_diagnosticSettings 'Microsoft.Insights/diagnosticSetti
 }
 
 // Default ASG on the vmss frontend. Feel free to constrict further.
-resource asgVmssFrontend 'Microsoft.Network/applicationSecurityGroups@2022-07-01' = {
+resource vmssFrontendApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-07-01' = {
   name: 'asg-frontend'
   location: location
 }
 
 // Default ASG on the vmss backend. Feel free to constrict further.
-resource asgVmssBackend 'Microsoft.Network/applicationSecurityGroups@2022-07-01' = {
+resource vmssBackendApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-07-01' = {
   name: 'asg-backend'
   location: location
 }
 
 // Default NSG on the vmss frontend. Feel free to constrict further.
-resource nsgVmssFrontendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
-  name: 'nsg-${clusterVNetName}-frontend'
+resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${vnetName}-frontend'
   location: location
   properties: {
     securityRules: [
@@ -282,7 +282,7 @@ resource nsgVmssFrontendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-
           destinationPortRange: '*'
           destinationApplicationSecurityGroups: [
             {
-              id: asgVmssFrontend.id
+              id: vmssFrontendApplicationSecurityGroup.id
             }
           ]
           direction: 'Inbound'
@@ -314,7 +314,7 @@ resource nsgVmssFrontendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-
           destinationPortRange: '22'
           destinationApplicationSecurityGroups: [
             {
-              id: asgVmssFrontend.id
+              id: vmssFrontendApplicationSecurityGroup.id
             }
           ]
           direction: 'Inbound'
@@ -354,9 +354,23 @@ resource nsgVmssFrontendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-
   }
 }
 
+resource vmssFrontendSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vmssFrontendSubnetNetworkSecurityGroup
+  name: 'default'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+  }
+}
+
 // Default NSG on the vmss backend. Feel free to constrict further.
-resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
-  name: 'nsg-${clusterVNetName}-backend'
+resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${vnetName}-backend'
   location: location
   properties: {
     securityRules: [
@@ -368,13 +382,13 @@ resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-0
           sourcePortRange: '*'
           sourceApplicationSecurityGroups: [
             {
-              id: asgVmssFrontend.id
+              id: vmssFrontendApplicationSecurityGroup.id
             }
           ]
           destinationPortRange: '443'
           destinationApplicationSecurityGroups: [
             {
-              id: asgVmssBackend.id
+              id: vmssBackendApplicationSecurityGroup.id
             }
           ]
           direction: 'Inbound'
@@ -406,7 +420,7 @@ resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-0
           destinationPortRange: '22'
           destinationApplicationSecurityGroups: [
             {
-              id: asgVmssBackend.id
+              id: vmssBackendApplicationSecurityGroup.id
             }
           ]
           direction: 'Inbound'
@@ -424,7 +438,7 @@ resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-0
           destinationPortRange: '3389'
           destinationApplicationSecurityGroups: [
             {
-              id: asgVmssBackend.id
+              id: vmssBackendApplicationSecurityGroup.id
             }
           ]
           direction: 'Inbound'
@@ -464,25 +478,11 @@ resource nsgVmssBackendSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-0
   }
 }
 
-resource nsgVmssFrontendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: nsgVmssFrontendSubnet
+resource vmssBackendSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vmssBackendSubnetNetworkSecurityGroup
   name: 'default'
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
-      }
-    ]
-  }
-}
-
-resource nsgVmssBackendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: nsgVmssBackendSubnet
-  name: 'default'
-  properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -493,8 +493,8 @@ resource nsgVmssBackendSubnet_diagnosticsSettings 'Microsoft.Insights/diagnostic
 }
 
 // Default NSG on the Vmss Backend internal load balancer subnet. Feel free to constrict further.
-resource nsgInternalLoadBalancerSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
-  name: 'nsg-${clusterVNetName}-ilbs'
+resource internalLoadBalancerSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${vnetName}-ilbs'
   location: location
   properties: {
     securityRules: [
@@ -505,7 +505,7 @@ resource nsgInternalLoadBalancerSubnet 'Microsoft.Network/networkSecurityGroups@
           protocol: 'Tcp'
           sourceApplicationSecurityGroups: [
             {
-              id: asgVmssFrontend.id
+              id: vmssFrontendApplicationSecurityGroup.id
             }
           ]
           sourcePortRange: '*'
@@ -562,11 +562,11 @@ resource nsgInternalLoadBalancerSubnet 'Microsoft.Network/networkSecurityGroups@
   }
 }
 
-resource nsgInternalLoadBalancerSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: nsgInternalLoadBalancerSubnet
+resource internalLoadBalancerSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: internalLoadBalancerSubnetNetworkSecurityGroup
   name: 'default'
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -577,8 +577,8 @@ resource nsgInternalLoadBalancerSubnet_diagnosticsSettings 'Microsoft.Insights/d
 }
 
 // NSG on the Application Gateway subnet.
-resource nsgAppGwSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
-  name: 'nsg-${clusterVNetName}-appgw'
+resource appGwSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${vnetName}-appgw'
   location: location
   properties: {
     securityRules: [
@@ -656,11 +656,11 @@ resource nsgAppGwSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
   }
 }
 
-resource nsgAppGwSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: nsgAppGwSubnet
+resource appGwSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: appGwSubnetNetworkSecurityGroup
   name: 'default'
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -671,8 +671,8 @@ resource nsgAppGwSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettin
 }
 
 // NSG on the Private Link subnet.
-resource nsgPrivateLinkEndpointsSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
-  name: 'nsg-${clusterVNetName}-privatelinkendpoints'
+resource privateLinkEndpointsSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${vnetName}-privatelinkendpoints'
   location: location
   properties: {
     securityRules: [
@@ -719,60 +719,11 @@ resource nsgPrivateLinkEndpointsSubnet 'Microsoft.Network/networkSecurityGroups@
   }
 }
 
-// NSG on the Deployment Agent subnet.
-resource nsgDeploymentAgentSubnet 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
-  name: 'nsg-${clusterVNetName}-deploymentagent'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'AllowAll443InFromVnet'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationPortRange: '443'
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 100
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'DenyAllInbound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationPortRange: '*'
-          destinationAddressPrefix: '*'
-          access: 'Deny'
-          priority: 1000
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'DenyAllOutbound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationPortRange: '*'
-          destinationAddressPrefix: '*'
-          access: 'Deny'
-          priority: 1000
-          direction: 'Outbound'
-        }
-      }
-    ]
-  }
-}
-
-resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: nsgPrivateLinkEndpointsSubnet
+resource privateLinkEndpointsSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: privateLinkEndpointsSubnetNetworkSecurityGroup
   name: 'default'
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -782,11 +733,60 @@ resource nsgPrivateLinkEndpointsSubnet_diagnosticsSettings 'Microsoft.Insights/d
   }
 }
 
+// NSG on the Deployment Agent subnet.
+resource deploymentAgentSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+  name: 'nsg-${vnetName}-deploymentagent'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowAll443InFromVnet'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllInbound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllOutbound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Outbound'
+        }
+      }
+    ]
+  }
+}
+
 // The spoke virtual network.
 // 65,536 (-reserved) IPs available to the workload, split across subnets four subnets for Compute,
 // one for App Gateway and one for Private Link endpoints.
 resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
-  name: clusterVNetName
+  name: vnetName
   location: location
   properties: {
     addressSpace: {
@@ -800,7 +800,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.0.0/24'
           networkSecurityGroup: {
-            id: nsgVmssFrontendSubnet.id
+            id: vmssFrontendSubnetNetworkSecurityGroup.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Disabled'
@@ -811,7 +811,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.1.0/24'
           networkSecurityGroup: {
-            id: nsgVmssBackendSubnet.id
+            id: vmssBackendSubnetNetworkSecurityGroup.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Disabled'
@@ -822,7 +822,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.4.0/28'
           networkSecurityGroup: {
-            id: nsgInternalLoadBalancerSubnet.id
+            id: internalLoadBalancerSubnetNetworkSecurityGroup.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Disabled'
@@ -833,7 +833,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.4.32/28'
           networkSecurityGroup: {
-            id: nsgPrivateLinkEndpointsSubnet.id
+            id: privateLinkEndpointsSubnetNetworkSecurityGroup.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
@@ -844,7 +844,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.4.64/28'
           networkSecurityGroup: {
-            id: nsgDeploymentAgentSubnet.id
+            id: deploymentAgentSubnetNetworkSecurityGroup.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
@@ -855,7 +855,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.5.0/24'
           networkSecurityGroup: {
-            id: nsgAppGwSubnet.id
+            id: appGwSubnetNetworkSecurityGroup.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Disabled'
@@ -866,28 +866,55 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         properties: {
           addressPrefix: '10.240.6.0/26'
           networkSecurityGroup: {
-            id: nsgBastionSubnet.id
+            id: bastionSubnetNetworkSecurityGroup.id
           }
         }
       }
     ]
   }
 
-  resource snetFrontend 'subnets' existing = {
+  resource vmssFrontendSubnet 'subnets' existing = {
     name: 'snet-frontend'
   }
 
-  resource snetBackend 'subnets' existing = {
+  resource vmssBackendSubnet 'subnets' existing = {
     name: 'snet-backend'
   }
 
-  resource azureBastionSubnet 'subnets' existing = {
+  resource bastionHostSubnet 'subnets' existing = {
     name: 'AzureBastionSubnet'
+  }
+
+  resource privateLinkEndpointsSubnet 'subnets' existing = {
+    name: 'snet-privatelinkendpoints'
+  }
+
+  resource appGatewaySubnet 'subnets' existing = {
+    name: 'snet-applicationgateway'
+  }
+
+  resource internalLoadBalancerSubnet 'subnets' existing = {
+    name: 'snet-ilbs'
+  }
+
+}
+
+resource vnetDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: vnet
+  name: 'default'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
   }
 }
 
 @description('The public IP for the regional hub\'s Azure Bastion service.')
-resource pipAzureBastion 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
   name: 'pip-ab-${location}'
   location: location
   sku: {
@@ -901,11 +928,11 @@ resource pipAzureBastion 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
   }
 }
 
-resource pipAzureBastion_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
+resource bastionPublicIpDiagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
   name: 'default'
-  scope: pipAzureBastion
+  scope: bastionPublicIp
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
@@ -922,7 +949,7 @@ resource pipAzureBastion_diagnosticSetting 'Microsoft.Insights/diagnosticSetting
 }
 
 @description('This regional hub\'s Azure Bastion service.')
-resource azureBastion 'Microsoft.Network/bastionHosts@2021-05-01' = {
+resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
   name: 'ab-${location}'
   location: location
   properties: {
@@ -933,10 +960,10 @@ resource azureBastion 'Microsoft.Network/bastionHosts@2021-05-01' = {
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: vnet::azureBastionSubnet.id
+            id: vnet::bastionHostSubnet.id
           }
           publicIPAddress: {
-            id: pipAzureBastion.id
+            id: bastionPublicIp.id
           }
         }
       }
@@ -947,11 +974,11 @@ resource azureBastion 'Microsoft.Network/bastionHosts@2021-05-01' = {
   }
 }
 
-resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource bastionHostDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'default'
-  scope: azureBastion
+  scope: bastionHost
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         category: 'BastionAuditLogs'
@@ -961,23 +988,9 @@ resource azureBastion_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@
   }
 }
 
-resource vnet_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: vnet
-  name: 'default'
-  properties: {
-    workspaceId: logAnaliticsWorkspace.id
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
-  }
-}
-
 // Used as primary public entry point for the workload. Expected to be assigned to an Azure Application Gateway.
 // This is a public facing IP, and would be best behind a DDoS Policy (not deployed simply for cost considerations)
-resource pipPrimaryWorkloadIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+resource primaryWorkloadPublicIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
   name: 'pip-gw'
   location: location
   sku: {
@@ -991,47 +1004,11 @@ resource pipPrimaryWorkloadIp 'Microsoft.Network/publicIPAddresses@2021-05-01' =
   }
 }
 
-resource pipPrimaryWorkloadIp_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
+resource primaryWorkloadPublicIpDiagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
   name: 'default'
-  scope: pipPrimaryWorkloadIp
+  scope: primaryWorkloadPublicIp
   properties: {
-    workspaceId: logAnaliticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'audit'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
-  }
-}
-
-// Used as primary public outbound point for the workload. Expected to be assigned to an Azure Outbound Application Gateway.
-// This is a public IP, and would be best behind a DDoS Policy (not deployed simply for cost considerations)
-resource pipOutboundLoadBalancerIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
-  name: 'pip-olb'
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  zones: pickZones('Microsoft.Network', 'publicIPAddresses', location, 3)
-  properties: {
-    publicIPAllocationMethod: 'Static'
-    idleTimeoutInMinutes: 4
-    publicIPAddressVersion: 'IPv4'
-  }
-}
-
-resource pipOutboundLoadBalancerIp_diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' =  {
-  name: 'default'
-  scope: pipOutboundLoadBalancerIp
-  properties: {
-    workspaceId: logAnaliticsWorkspace.id
+    workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
         categoryGroup: 'audit'
@@ -1051,8 +1028,20 @@ resource pipOutboundLoadBalancerIp_diagnosticSetting 'Microsoft.Insights/diagnos
 
 output vnetResourceId string = vnet.id
 output vmssSubnetResourceIds array = [
-  vnet::snetFrontend.id
-  vnet::snetBackend.id
+  vnet::vmssFrontendSubnet.id
+  vnet::vmssBackendSubnet.id
 ]
-output appGwPublicIpAddress string = pipPrimaryWorkloadIp.properties.ipAddress
-output bastionHostName string = azureBastion.name
+output appGwPublicIpAddress string = primaryWorkloadPublicIp.properties.ipAddress
+output bastionHostName string = bastionHost.name
+
+output vnetName string = vnet.name
+output privateEndpointsSubnetName string = vnet::privateLinkEndpointsSubnet.name
+output appGatewaySubnetName string = vnet::appGatewaySubnet.name
+output vmssFrontendSubnetName string = vnet::vmssFrontendSubnet.name
+output vmssBackendSubnetName string = vnet::vmssBackendSubnet.name
+output internalLoadBalancerSubnetName string = vnet::internalLoadBalancerSubnet.name
+
+output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
+
+output vmssFrontendApplicationSecurityGroupName string = vmssFrontendApplicationSecurityGroup.name
+output vmssBackendApplicationSecurityGroupName string = vmssBackendApplicationSecurityGroup.name
