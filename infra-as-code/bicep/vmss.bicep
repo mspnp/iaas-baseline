@@ -60,6 +60,17 @@ param vmssFrontendApplicationSecurityGroupName string
 @description('The name of the backend Application Security Group.')
 param vmssBackendApplicationSecurityGroupName string
 
+@description('The Azure Active Directory group/user object id (guid) that will be assigned as the admin users for all deployed virtual machines.')
+@minLength(36)
+param adminAadSecurityPrincipalObjectId string
+
+@description('The principal type of the adminAadSecurityPrincipalObjectId ID.')
+@allowed([
+  'User'
+  'Group'
+])
+param adminAddSecurityPrincipalType string
+
 /*** VARIABLES ***/
 
 var vmssBackendSubdomain = 'backend'
@@ -86,6 +97,12 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2018-0
 resource logAnalyticsContributorUserRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
   name: '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
   scope: subscription()
+}
+
+@description('Built-in Azure RBAC role that is applied to the virtual machines to grant remote user access to them via SSH or RDP. Granted to the provided group object id.')
+resource virtualMachineAdminLoginRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
+  scope: subscription()
+  name: '1c0163c0-47e6-4577-8991-ea5c82e286e4'
 }
 
 resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
@@ -214,6 +231,18 @@ resource vmssBackendContributorUserRoleRoleAssignment 'Microsoft.Authorization/r
     roleDefinitionId: logAnalyticsContributorUserRole.id
     principalId: vmssBackendManagedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+@description('Sets up the provided object id that belongs to a group or user to have access to authenticate into virtual machines with the AAD login extension installed in this resource group.')
+resource groupOrUserAdminLoginRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(resourceGroup().id, adminAadSecurityPrincipalObjectId, virtualMachineAdminLoginRole.id)
+  properties: {
+    principalId: adminAadSecurityPrincipalObjectId
+    roleDefinitionId: virtualMachineAdminLoginRole.id
+    principalType: adminAddSecurityPrincipalType
+    description: 'Allows users in this group or a single user access to log into virtual machines that use the AAD login extension.'
   }
 }
 
@@ -353,6 +382,16 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
       extensionProfile: {
         extensions: [
           {
+            name: 'AADSSHLogin'
+            properties: {
+              provisionAfterExtensions: []
+              publisher: 'Microsoft.Azure.ActiveDirectory'
+              type: 'AADSSHLoginForLinux'
+              typeHandlerVersion: '1.0'
+              autoUpgradeMinorVersion: true
+            }
+          }
+          {
             name: 'KeyVaultForLinux'
             properties: {
               publisher: 'Microsoft.Azure.KeyVault'
@@ -452,6 +491,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     vmssFrontendSecretsUserRoleRoleAssignmentModule
     vmssFrontendKeyVaultReaderRoleAssignmentModule
     vmssBackend
+    groupOrUserAdminLoginRoleRoleAssignment
   ]
 }
 
@@ -503,7 +543,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
               rebootSetting: 'IfRequired'
             }
             assessmentMode: 'ImageDefault'
-            enableHotpatching: true
+            enableHotpatching: false
           }
         }
         adminUsername: defaultAdminUserName
@@ -529,9 +569,8 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
         imageReference: {
           publisher: 'MicrosoftWindowsServer'
           offer: 'WindowsServer'
-          sku: '2022-datacenter-azure-edition-core-smalldisk'
+          sku: '2022-datacenter-azure-edition-smalldisk'
           version: 'latest'
-          exactVersion: '20348.1668.230404'
         }
         dataDisks: [
           {
@@ -590,6 +629,19 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
       }
       extensionProfile: {
         extensions: [
+          {
+            name: 'AADLogin'
+            properties: {
+              autoUpgradeMinorVersion: true
+              publisher: 'Microsoft.Azure.ActiveDirectory'
+              type: 'AADLoginForWindows'
+              typeHandlerVersion: '2.0'
+              settings: {
+                mdmId: ''
+              }
+            }
+          }
+
           {
             name: 'KeyVaultForWindows'
             properties: {
@@ -701,6 +753,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
     internalLoadBalancer
     outboundLoadBalancer
     vmssBackendSecretsUserRoleRoleAssignmentModule
+    groupOrUserAdminLoginRoleRoleAssignment
   ]
 }
 
