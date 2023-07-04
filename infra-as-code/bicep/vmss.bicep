@@ -384,7 +384,9 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
           {
             name: 'AADSSHLogin'
             properties: {
-              provisionAfterExtensions: []
+              provisionAfterExtensions: [
+                'CustomScript'
+              ]
               publisher: 'Microsoft.Azure.ActiveDirectory'
               type: 'AADSSHLoginForLinux'
               typeHandlerVersion: '1.0'
@@ -632,6 +634,9 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
           {
             name: 'AADLogin'
             properties: {
+              provisionAfterExtensions: [
+                'CustomScript'
+              ]
               autoUpgradeMinorVersion: true
               publisher: 'Microsoft.Azure.ActiveDirectory'
               type: 'AADLoginForWindows'
