@@ -229,7 +229,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
   :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
-   # [This takes about 18 minutes.]
+   # [This takes about 30 minutes.]
    az deployment group create -g rg-iaas -f infra-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE} adminAadSecurityPrincipalObjectId="$(az ad signed-in-user show --query "id" -o tsv)"
    ```
 
