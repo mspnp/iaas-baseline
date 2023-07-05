@@ -55,30 +55,37 @@ A deployment of VM-hosted workloads typically experiences a separation of duties
 
 **Please start this learning journey in the _Preparing for the VMs_ section.** If you follow this through to the end, you'll have our recommended baseline infrastructure as a service installed, with an end-to-end sample workload running for you to reference in your own Azure subscription.
 
-### 1. :rocket: Preparing for the VMs
+### 1. :rocket: Preparing
 
 There are considerations that must be addressed before you start deploying your compute. Do I have enough permissions in my subscription and AD tenant to do a deployment of this size? How much of this will be handled by my team directly vs having another team be responsible?
 
 | :clock10: | These steps are intentionally verbose, intermixed with context, narrative, and guidance. The deployments are all conducted via [Bicep templates](https://learn.microsoft.com/azure/azure-resource-manager/bicep/overview), but they are executed manually via `az cli` commands. We strongly encourage you to dedicate time to walk through these instructions, with a focus on learning. We do not provide any "one click" method to complete all deployments.<br><br>Once you understand the components involved and have identified the shared responsibilities between your team and your greater organization, you are encouraged to build suitable, repeatable deployment processes around your final infrastructure and bootstrapping. The [DevOps archicture design](https://learn.microsoft.com/azure/architecture/guide/devops/devops-start-here) is a great place to learn best practices to build your own automation pipelines. |
 |-----------|:--------------------------|
 
-
 1. An Azure subscription.
 
    The subscription used in this deployment cannot be a [free account](https://azure.microsoft.com/free); it must be a standard EA, pay-as-you-go, or Visual Studio benefit subscription. This is because the resources deployed here are beyond the quotas of free subscriptions.
 
-   > :warning: The user or service principal initiating the deployment process _must_ have the following minimal set of Azure Role-Based Access Control (RBAC) roles:
-   >
-   > * [Contributor role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#contributor) is _required_ at the subscription level to have the ability to create resource groups and perform deployments.
-   > * [User Access Administrator role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#user-access-administrator) is _required_ at the subscription level since you'll be performing role assignments to managed identities across various resource groups.
-   > * [Resource Policy Contributor role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#resource-policy-contributor) is _required_ at the subscription level since you'll be creating custom Azure policy definitions to govern resources in your compute.
+1. Login into the Azure subscription that you'll be deploying into.
 
-1. An admin user in an Azure AD tenant.
+   ```bash
+   az login
+   export TENANTID_AZSUBSCRIPTION_IAAS_BASELINE=$(az account show --query tenantId -o tsv)
+   echo TENANTID_AZSUBSCRIPTION_IAAS_BASELINE: $TENANTID_AZSUBSCRIPTION_IAAS_BASELINE
+   TENANTS=$(az rest --method get --url https://management.azure.com/tenants?api-version=2020-01-01 --query 'value[].{TenantId:tenantId,Name:displayName}' -o table)
+   ```
 
-   > :warning: The user or service principal initiating the deployment process _must_ have the following minimal set of Azure AD permissions assigned:
-   >
-   > * Azure AD [User Administrator](https://learn.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles#user-administrator-permissions) is _required_ to create a "break glass" compute admin Active Directory Security Group and User. Alternatively, you could get your Azure AD admin to create this for you when instructed to do so.
-   >   * If you are not part of the User Administrator group in the tenant associated to your Azure subscription, please consider [creating a new tenant](https://learn.microsoft.com/azure/active-directory/fundamentals/active-directory-access-create-new-tenant#create-a-new-tenant-for-your-organization) to use while evaluating this implementation. The Azure AD tenant backing your login users does NOT need to be the same tenant associated with your Azure subscription.
+1. Validate your saved Azure subscription's tenant id is correct
+
+   ```bash
+   echo "${TENANTS}" | grep -z ${TENANTID_AZSUBSCRIPTION_IAAS_BASELINE}
+   ```
+   :warning: Do not procced if the tenant highlighted in red is not correct. Start over by `az login` into the proper Azure subscription.
+
+1. The user or service principal initiating the deployment process _must_ have the following minimal set of Azure Role-Based Access Control (RBAC) roles:
+
+   * [Contributor role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#contributor) is _required_ at the subscription level to have the ability to create resource groups and perform deployments.
+   * [User Access Administrator role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#user-access-administrator) is _required_ at the subscription level since you'll be performing role assignments to managed identities across various resource groups.
 
 1. Latest [Azure CLI installed](https://learn.microsoft.com/cli/azure/install-azure-cli?view=azure-cli-latest) (must be at least 2.40), or you can perform this from Azure Cloud Shell by clicking below.
 
@@ -163,69 +170,6 @@ There are considerations that must be addressed before you start deploying your 
    echo VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE: $VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE
    ```
 
-1. Query and save your Azure subscription's tenant id.
-
-   > :book: The Contoso Azure AD team requires all operations user access to be security-group based. This applies to the new VMs that are being created for the workload. VM logging will be AAD-backed and access granted based on users' AAD group membership(s).
-
-   ```bash
-   export TENANTID_AZSUBSCRIPTION_IAAS_BASELINE=$(az account show --query tenantId -o tsv)
-   echo TENANTID_AZSUBSCRIPTION_IAAS_BASELINE: $TENANTID_AZSUBSCRIPTION_IAAS_BASELINE
-   ```
-
-1. Playing the role as the Contoso Azure AD team, login into the tenant where compute authentication will be associated with.
-
-   > :bulb: Skip the `az login` command if you plan to use your current user account's Azure AD tenant for compute authentication.
-
-   ```bash
-   az login -t <Replace-With-Compute-AzureAD-TenantId> --allow-no-subscriptions
-   export TENANTID_DOMAIN_COMPUTEAUTHN_IAAS_BASELINE=$(az account show --query tenantId -o tsv)
-   echo TENANTID_DOMAIN_COMPUTEAUTHN_IAAS_BASELINE: $TENANTID_DOMAIN_COMPUTEAUTHN_IAAS_BASELINE
-   ```
-
-1. Create/identify the Azure AD security group to be given with the role `compute-admin`.
-
-   If you already have a security group that is appropriate for your compute's admin user accounts, use that group and don't create a new one. If using your own group or your Azure AD administrator created one for you to use; you will need to update the group name and ID throughout the reference implementation.
-   ```bash
-   export AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE=[Paste your existing compute admin group Object ID here.]
-   echo AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE: $AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE
-   ```
-
-   If you want to create a new one instead, you can use the following code:
-
-   ```bash
-   export AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE=$(az ad group create --display-name 'iaas-admins' --mail-nickname 'iaas-admins' --description "Principals in this group are iaas admin VMs." --query id -o tsv)
-   echo AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE: $AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE
-   ```
-
-   This Azure AD group object ID will be used later while creating the VMs. This way, once the VMs gets deployed the new group will get the proper Role to be able to login.
-
-1. Create a "break-glass" compute administrator user for your VMs.
-
-   > :book: The organization knows the value of having a break-glass admin user for their critical infrastructure. The app team requests a compute admin user and Azure AD Admin team proceeds with the creation of the user in Azure AD.
-
-   You should skip this step, if the group identified in the former step already has a compute admin assigned as member.
-
-   ```bash
-   TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE=$(az ad signed-in-user show --query 'userPrincipalName' -o tsv | cut -d '@' -f 2 | sed 's/\"//')
-   AADOBJECTNAME_USER_COMPUTEADMIN=iaas-admin
-   AADOBJECTID_USER_COMPUTEADMIN=$(az ad user create --display-name=${AADOBJECTNAME_USER_COMPUTEADMIN} --user-principal-name ${AADOBJECTNAME_USER_COMPUTEADMIN}@${TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE} --force-change-password-next-sign-in --password ChangeMeIaaSAdminChangeMe --query id -o tsv)
-   echo TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE: $TENANTDOMAIN_COMPUTEAUTHN_IAAS_BASELINE
-   echo AADOBJECTNAME_USER_COMPUTEADMIN: $AADOBJECTNAME_USER_COMPUTEADMIN
-   echo AADOBJECTID_USER_COMPUTEADMIN: $AADOBJECTID_USER_COMPUTEADMIN
-   ```
-
-1. Add the admin user to the compute admin security group.
-
-   > :book: The recently created break-glass admin user is added to the Compute Admin group from Azure AD. After this step the Azure AD Admin team will have finished the app team's request.
-
-   You should skip this step, if the group identified in the former step already has a compute admin assigned as member.
-
-   ```bash
-   az ad group member add -g $AADOBJECTID_GROUP_COMPUTEADMIN_IAAS_BASELINE --member-id $AADOBJECTID_USER_COMPUTEADMIN
-   ```
-
-   :bulb: If you are using a single tenant for this walk-through, the compute deployment step later will take care of the necessary role assignments for the groups created above. Specifically, in the above steps, you created the the Azure AD security group `iaas-admins` is going to contain compute admins. Those group Object IDs will be associated to the 'Virtual Machine Administrator Login' [RBAC role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#virtual-machine-administrator-login). Using Azure RBAC as your authorization approach is ultimately preferred as it allows for the unified management and access control across Azure Resources, VMs, and VM resources. At the time of this writing there are ten [Azure RBAC roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#compute) that represent typical compute access patterns.
-
 ### 2. Create the resoure group
 
 The following two resource groups will be created and populated with networking resources in the steps below.
@@ -233,14 +177,6 @@ The following two resource groups will be created and populated with networking 
 | Name                            | Purpose                                   |
 |---------------------------------|-------------------------------------------|
 | rg-iaas | Contains all of your organization's regional spokes and related networking resources. |
-
-1. Login into the Azure subscription that you'll be deploying into.
-
-   > :book: The networking team logins into the Azure subscription that will contain the regional spokes. At Contoso, all of their regional spokes are in the same, centrally-managed subscription.
-
-   ```bash
-   az login -t $TENANTID_AZSUBSCRIPTION_IAAS_BASELINE
-   ```
 
 1. Create the networking spokes resource group.
 
@@ -262,6 +198,8 @@ This is the heart of the guidance in this reference implementation. Here you wil
    ```bash
    ssh-keygen -m PEM -t rsa -b 4096 -C "opsuser01@iaas" -f ~/.ssh/opsuser01.pem -q -N ""
    ```
+
+   > Note: you will be able to use the Azure AAD integration to authenticate as well as local users with ssh keys and/or passwords based on your preference as everything is enabled as part of this deployment. But the steps will guide you over the ssh authN process using local users(ops and/or admin) as this offers you a consistent story between Azure Linux and Windows using SSH auth type since at the time of writing this the SSH AAD integration is not supported in Azure Windows VMs.
 
 1. Ensure you have **read-only** access to the private key.
 
@@ -291,8 +229,8 @@ This is the heart of the guidance in this reference implementation. Here you wil
   :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
-   # [This takes about 18 minutes.]
-   az deployment group create -g rg-iaas -f infras-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE}
+   # [This takes about 30 minutes.]
+   az deployment group create -g rg-iaas -f infra-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE} adminAadSecurityPrincipalObjectId="$(az ad signed-in-user show --query "id" -o tsv)"
    ```
 
    The deployment creation will emit the following:
@@ -330,14 +268,14 @@ This is the heart of the guidance in this reference implementation. Here you wil
    ```
 
    ```output
-   Column1                    Column2         Column3
-   -------------------------  --------------  ------------------------------------------------------------------------------------------------------------------------
-   vmss-backend-00_e4057ba4   backend7RGXGC   ['KeyVaultForWindows', 'AzureMonitorWindowsAgent', 'CustomScript', 'DependencyAgentWindows', 'ApplicationHealthWindows']
-   vmss-backend-00_c454e7bb   backendGK0DHH   ['DependencyAgentWindows', 'KeyVaultForWindows', 'CustomScript', 'ApplicationHealthWindows', 'AzureMonitorWindowsAgent']
-   vmss-backend-00_6e781ed7   backendUNG2C7   ['CustomScript', 'ApplicationHealthWindows', 'DependencyAgentWindows', 'AzureMonitorWindowsAgent', 'KeyVaultForWindows']
-   vmss-frontend-00_187eb769  frontend6SO8YX  ['KeyVaultForLinux', 'AzureMonitorLinuxAgent', 'CustomScript', 'HealthExtension', 'DependencyAgentLinux']
-   vmss-frontend-00_e49497b3  frontend7LVWP9  ['DependencyAgentLinux', 'KeyVaultForLinux', 'CustomScript', 'AzureMonitorLinuxAgent', 'HealthExtension']
-   vmss-frontend-00_9d738714  frontendRCDIWC  ['CutomScript', 'AzureMonitorLinuxAgent', 'KeyVaultForLinux', 'HealthExtension', 'DependencyAgentLinux']
+   Column1                 Column2         Column3
+   ----------------------  --------------  ------------------------------------------------------------------------------------------------------------------------------------
+   vmss-backend_cde8db05   backendDWC7I3   ['DependencyAgentWindows', 'AADLogin', 'KeyVaultForWindows', 'CustomScript', 'ApplicationHealthWindows', 'AzureMonitorWindowsAgent']
+   vmss-backend_c0d74d90   backendHIVL2O   ['ApplicationHealthWindows', 'KeyVaultForWindows', 'AzureMonitorWindowsAgent', 'DependencyAgentWindows', 'AADLogin', 'CustomScript']
+   vmss-backend_aabab2a4   backendNNQTZW   ['ApplicationHealthWindows', 'KeyVaultForWindows', 'AzureMonitorWindowsAgent', 'CustomScript', 'DependencyAgentWindows', 'AADLogin']
+   vmss-frontend_22b8ee46  frontend9MTYKM  ['AzureMonitorLinuxAgent', 'CustomScript', 'KeyVaultForLinux', 'AADSSHLogin', 'HealthExtension', 'DependencyAgentLinux']
+   vmss-frontend_da993e21  frontendADLBDR  ['CustomScript', 'KeyVaultForLinux', 'DependencyAgentLinux', 'AzureMonitorLinuxAgent', 'HealthExtension', 'AADSSHLogin']
+   vmss-frontend_47a941aa  frontendJVSX4A  ['AzureMonitorLinuxAgent', 'KeyVaultForLinux', 'HealthExtension', 'DependencyAgentLinux', 'AADSSHLogin', 'CustomScript']
    ```
 
    :bulb: From some of the extension names in `Column3` you can easily spot that the backend VMs are `Windows` machines and the frontend VMs are `Linux` machines. For more information about the VM extensions please take a look at https://learn.microsoft.com/azure/virtual-machines/extensions/overview
@@ -345,18 +283,50 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query Heath Extension substatus for your Frontend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view --resource-group rg-iaas --name <Frontend-VMNAME> --query "[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
+   az vm get-instance-view -g rg-iaas --ids $(az vm list -g rg-iaas --query "[[?contains(name,'vmss-frontend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
+
+   ```output
+   [
+     "vmss-frontend<0>",
+     [
+       "Application found to be healthy"
+     ]
+     ...
+     "vmss-frontend<N>",
+     [
+       "Application found to be healthy"
+     ]
+   ]
+   ```
+
+   :exclamation: Provided the Health extension substatus message says that the "Application found to be healthy", it means your virtual machine is healthy while if the message is empty it is being considered unhealthy.
 
 1. Query Application Heath Windows Extension substatus for your Backend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view --resource-group rg-iaas --name <Backend-VMNAME> --query "[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
+   az vm get-instance-view -g rg-iaas --ids $(az vm list -g rg-iaas --query "[[?contains(name,'vmss-backend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
+
+   ```output
+   [
+     "vmss-backend<0>",
+     [
+       "Application found to be healthy"
+     ]
+     ...
+     "vmss-backend<N>",
+     [
+       "Application found to be healthy"
+     ]
+   ]
+   ```
+
+   :exclamation: Provided the Health extension substatus message says that the "Application found to be healthy", it means your virtual machine is healthy while if the message is empty it is being considered unhealthy.
 
 1. Get the Azure Bastion name.
 

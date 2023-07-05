@@ -44,6 +44,17 @@ param frontendCloudInitAsBase64 string
 @secure()
 param adminPassword string
 
+@description('The Azure Active Directory group/user object id (guid) that will be assigned as the admin users for all deployed virtual machines.')
+@minLength(36)
+param adminAadSecurityPrincipalObjectId string
+
+@description('The principal type of the adminAadSecurityPrincipalObjectId ID.')
+@allowed([
+  'User'
+  'Group'
+])
+param adminAddSecurityPrincipalType string = 'User'
+
 /*** VARIABLES ***/
 
 var subRgUniqueString = uniqueString('vmss', subscription().subscriptionId, resourceGroup().id)
@@ -120,6 +131,8 @@ module vmssModule 'vmss.bicep' = {
     adminPassword: adminPassword
     vmssFrontendApplicationSecurityGroupName: networkingModule.outputs.vmssFrontendApplicationSecurityGroupName
     vmssBackendApplicationSecurityGroupName: networkingModule.outputs.vmssBackendApplicationSecurityGroupName
+    adminAadSecurityPrincipalObjectId: adminAadSecurityPrincipalObjectId
+    adminAddSecurityPrincipalType: adminAddSecurityPrincipalType
   }
   dependsOn: []
 }
