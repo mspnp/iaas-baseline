@@ -283,36 +283,50 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query Heath Extension substatus for your Frontend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view --resource-group rg-iaas --name <Frontend-VMNAME> --query "[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
+   az vm get-instance-view -g rg-iaas --ids $(az vm list -g rg-iaas --query "[[?contains(name,'vmss-frontend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
    ```output
    [
-     "<Frontend-VMNAME>",
+     "vmss-frontend<0>",
+     [
+       "Application found to be healthy"
+     ]
+     ...
+     "vmss-frontend<N>",
      [
        "Application found to be healthy"
      ]
    ]
    ```
+
+   :exclamation: Provided the Health extension substatus message says that the "Application found to be healthy", it means your virtual machine is healthy while if the message is empty it is being considered unhealthy.
 
 1. Query Application Heath Windows Extension substatus for your Backend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view --resource-group rg-iaas --name <Backend-VMNAME> --query "[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
+   az vm get-instance-view -g rg-iaas --ids $(az vm list -g rg-iaas --query "[[?contains(name,'vmss-backend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
 
    ```output
    [
-     "<Backend-VMNAME>",
+     "vmss-backend<0>",
+     [
+       "Application found to be healthy"
+     ]
+     ...
+     "vmss-backend<N>",
      [
        "Application found to be healthy"
      ]
    ]
    ```
+
+   :exclamation: Provided the Health extension substatus message says that the "Application found to be healthy", it means your virtual machine is healthy while if the message is empty it is being considered unhealthy.
 
 1. Get the Azure Bastion name.
 
