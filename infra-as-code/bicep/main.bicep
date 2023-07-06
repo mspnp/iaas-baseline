@@ -40,13 +40,20 @@ param domainName string = 'contoso.com'
 @minLength(100)
 param frontendCloudInitAsBase64 string
 
-@description('A cloud init file (starting with #cloud-config) as a base 64 encoded string used to perform image customization on the jump box VMs. Used for user-management in this context.')
-@minLength(100)
-param backendCloudInitAsBase64 string
-
 @description('The admin passwork for the Windows backend machines.')
 @secure()
 param adminPassword string
+
+@description('The Azure Active Directory group/user object id (guid) that will be assigned as the admin users for all deployed virtual machines.')
+@minLength(36)
+param adminAadSecurityPrincipalObjectId string
+
+@description('The principal type of the adminAadSecurityPrincipalObjectId ID.')
+@allowed([
+  'User'
+  'Group'
+])
+param adminAddSecurityPrincipalType string = 'User'
 
 /*** VARIABLES ***/
 
@@ -115,7 +122,6 @@ module vmssModule 'vmss.bicep' = {
     baseName: vmssName
     ingressDomainName: ingressDomainName
     frontendCloudInitAsBase64: frontendCloudInitAsBase64
-    backendCloudInitAsBase64: backendCloudInitAsBase64
     keyVaultName: secretsModule.outputs.keyVaultName
     vmssWorkloadPublicAndPrivatePublicCertsSecretUri: secretsModule.outputs.vmssWorkloadPublicAndPrivatePublicCertsSecretUri
     agwName: gatewayModule.outputs.appGatewayName
@@ -125,6 +131,8 @@ module vmssModule 'vmss.bicep' = {
     adminPassword: adminPassword
     vmssFrontendApplicationSecurityGroupName: networkingModule.outputs.vmssFrontendApplicationSecurityGroupName
     vmssBackendApplicationSecurityGroupName: networkingModule.outputs.vmssBackendApplicationSecurityGroupName
+    adminAadSecurityPrincipalObjectId: adminAadSecurityPrincipalObjectId
+    adminAddSecurityPrincipalType: adminAddSecurityPrincipalType
   }
   dependsOn: []
 }
@@ -158,3 +166,4 @@ module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
 output keyVaultName string = secretsModule.outputs.keyVaultName
 output appGwPublicIpAddress string = networkingModule.outputs.appGwPublicIpAddress
 output bastionHostName string = networkingModule.outputs.bastionHostName
+output backendAdminUserName string = vmssModule.outputs.backendAdminUserName

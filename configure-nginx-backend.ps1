@@ -10,6 +10,12 @@ $dataDisk | Initialize-Disk -PartitionStyle MBR -PassThru | New-Partition -UseMa
 # Firewall config
 netsh advfirewall firewall add rule name="http" dir=in action=allow protocol=TCP localport=80
 netsh advfirewall firewall add rule name="https" dir=in action=allow protocol=TCP localport=443
+netsh advfirewall firewall add rule name="ssh" dir=in action=allow protocol=TCP localport=22
+
+# Install OpenSSH server, start and configure the service
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service -Name sshd -StartupType 'Automatic'
 
 # Download nginx.
 cd w:\
