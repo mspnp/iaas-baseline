@@ -162,6 +162,16 @@ module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
   dependsOn: []
 }
 
+//Enable VM insights for Azure Monitor Agent.
+module monitoringModule 'monitoring.bicep' = {
+  name: 'monitoringDeploy'
+  params: {
+    location: location
+    logAnalyticsWorkspaceName: networkingModule.outputs.logAnalyticsWorkspaceName
+  }
+  dependsOn: []
+}
+
 /*** OUTPUTS ***/
 output keyVaultName string = secretsModule.outputs.keyVaultName
 output appGwPublicIpAddress string = networkingModule.outputs.appGwPublicIpAddress
