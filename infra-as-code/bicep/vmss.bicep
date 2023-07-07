@@ -460,6 +460,9 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
               typeHandlerVersion: '9.10'
               autoUpgradeMinorVersion: true
               enableAutomaticUpgrade: true
+              settings: {
+                enableAMA: true
+              }
             }
           }
           {
@@ -726,6 +729,9 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
               typeHandlerVersion: '9.10'
               autoUpgradeMinorVersion: true
               enableAutomaticUpgrade: true
+              settings: {
+                enableAMA: true
+              }
             }
           }
 
