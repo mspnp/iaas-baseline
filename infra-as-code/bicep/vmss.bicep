@@ -325,7 +325,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         osDisk: {
           diffDiskSettings: {
             option: 'Local'
-            placement: 'ResourceDisk'
+            placement: 'CacheDisk'
           }
           caching: 'ReadOnly'
           createOption: 'FromImage'
@@ -561,7 +561,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
           osType: 'Windows'
           diffDiskSettings: {
             option: 'Local'
-            placement: 'ResourceDisk'
+            placement: 'CacheDisk'
           }
           caching: 'ReadOnly'
           createOption: 'FromImage'
