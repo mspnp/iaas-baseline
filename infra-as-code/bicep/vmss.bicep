@@ -298,6 +298,10 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     orchestrationMode: 'Flexible'
     platformFaultDomainCount: 1
     zoneBalance: false
+    automaticRepairsPolicy: {
+      enabled: true
+      gracePeriod: 'PT30M'
+    }
     virtualMachineProfile: {
       diagnosticsProfile: {
         bootDiagnostics: {
@@ -524,6 +528,10 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
     orchestrationMode: 'Flexible'
     platformFaultDomainCount: 1
     zoneBalance: false
+    automaticRepairsPolicy: {
+      enabled: true
+      gracePeriod: 'PT30M'
+    }
     virtualMachineProfile: {
       securityProfile: {
         securityType: 'TrustedLaunch'
