@@ -328,6 +328,21 @@ This is the heart of the guidance in this reference implementation. Here you wil
 
    :exclamation: Provided the Health extension substatus message says that the "Application found to be healthy", it means your virtual machine is healthy while if the message is empty it is being considered unhealthy.
 
+1. Query the virtual machine scale set frontend and backend auto repair policy configuration
+
+   ```bash
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachineScaleSets' and resourceGroup contains 'rg-iaas' | project ['1-Name'] = name, ['2-AutoRepairEnabled'] = properties.automaticRepairsPolicy.enabled, ['3-AutoRepairEnabledGracePeriod'] = properties.automaticRepairsPolicy.gracePeriod" -o table
+   ```
+
+   :bulb: If the auto repair is enabled and an instance is found to be unhealthy, then the scale set performs repair action by deleting the unhealthy instance and creating a new one to replace it. At any given time, no more than 5% of the instances in the scale set are repaired through the automatic repairs policy. Grace period is the amount of time to allow the instance to return to healthy state.
+
+   ```output
+   1-Name         2-AutoRepairEnabled    3-AutoRepairEnabledGracePeriod
+   -------------  ---------------------  --------------------------------
+   vmss-backend   True                   PT30M
+   vmss-frontend  True                   PT30M
+   ```
+
 1. Get the Azure Bastion name.
 
    ```bash
