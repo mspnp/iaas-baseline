@@ -328,6 +328,34 @@ This is the heart of the guidance in this reference implementation. Here you wil
 
    :exclamation: Provided the Health extension substatus message says that the "Application found to be healthy", it means your virtual machine is healthy while if the message is empty it is being considered unhealthy.
 
+1. Query the virtual machine scale set frontend and backend auto repair policy configuration
+
+   ```bash
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachineScaleSets' and resourceGroup contains 'rg-iaas' | project ['1-Name'] = name, ['2-AutoRepairEnabled'] = properties.automaticRepairsPolicy.enabled, ['3-AutoRepairEnabledGracePeriod'] = properties.automaticRepairsPolicy.gracePeriod" -o table
+   ```
+
+   :bulb: If the auto repair is enabled and an instance is found to be unhealthy, then the scale set performs repair action by deleting the unhealthy instance and creating a new one to replace it. At any given time, no more than 5% of the instances in the scale set are repaired through the automatic repairs policy. Grace period is the amount of time to allow the instance to return to healthy state.
+
+   ```output
+   1-Name         2-AutoRepairEnabled    3-AutoRepairEnabledGracePeriod
+   -------------  ---------------------  --------------------------------
+   vmss-backend   True                   PT30M
+   vmss-frontend  True                   PT30M
+   ```
+
+1. Query the resources that are Non Compliance based on the Policies assigned to them
+
+   ```bash
+   az graph query -q "PolicyResources | where type == 'microsoft.policyinsights/policystates' and properties.policyAssignmentScope contains 'rg-iaas' | where properties.complianceState == 'NonCompliant' | project ['1-PolicyAssignmentName'] = properties.policyAssignmentName, ['2-NonCompliantResourceId'] = properties.resourceId" -o table
+   ```
+
+   ```output
+   1-PolicyAssignmentName                2-NonCompliantResourceId
+   ------------------------------------  --------------------------------------------------------------------------------------------------------------------------------------------
+   9c2bf0f9-855d-596c-a2b0-0439c3b5a6c3  /subscriptions/d0d422cd-e446-42aa-a2e2-e88806508d3b/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachinescalesets/vmss-backend
+   bba5016f-b2e2-587d-8d8c-e25c5853b5fc  /subscriptions/d0d422cd-e446-42aa-a2e2-e88806508d3b/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachinescalesets/vmss-frontend
+   ```
+
 1. Get the Azure Bastion name.
 
    ```bash

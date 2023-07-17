@@ -41,8 +41,9 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06
     publicNetworkAccessForQuery: 'Enabled'
     forceCmkForQuery: false
     features: {
-      disableLocalAuth: true
-      enableLogAccessUsingOnlyResourcePermissions: true
+      disableLocalAuth: false
+      enableDataExport: false
+      enableLogAccessUsingOnlyResourcePermissions: false
     }
     workspaceCapping: {
       dailyQuotaGb: -1
