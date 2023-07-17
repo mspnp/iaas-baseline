@@ -267,6 +267,12 @@ resource vmssBackendApplicationSecurityGroup 'Microsoft.Network/applicationSecur
   location: location
 }
 
+@description('Application Security Group applied to Key Vault private endpoint.')
+resource keyVaultApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-11-01' = {
+  name: 'asg-keyvault'
+  location: location
+}
+
 // Default NSG on the vmss frontend. Feel free to constrict further.
 resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
   name: 'nsg-${vnetName}-frontend'
