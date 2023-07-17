@@ -98,6 +98,7 @@ module secretsModule 'secrets.bicep' = {
     appGatewayListenerCertificate: appGatewayListenerCertificate
     vmssWildcardTlsPublicCertificate: vmssWildcardTlsPublicCertificate
     vmssWildcardTlsPublicAndKeyCertificates: vmssWildcardTlsPublicAndKeyCertificates
+    keyVaultApplicationSecurityGroupName: networkingModule.outputs.keyVaultApplicationSecurityGroupName
   }
 }
 

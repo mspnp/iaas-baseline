@@ -1056,3 +1056,5 @@ output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
 
 output vmssFrontendApplicationSecurityGroupName string = vmssFrontendApplicationSecurityGroup.name
 output vmssBackendApplicationSecurityGroupName string = vmssBackendApplicationSecurityGroup.name
+output keyVaultApplicationSecurityGroupName string = keyVaultApplicationSecurityGroup.name
+
