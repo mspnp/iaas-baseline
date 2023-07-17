@@ -690,7 +690,11 @@ resource privateLinkEndpointsSubnetNetworkSecurityGroup 'Microsoft.Network/netwo
           sourcePortRange: '*'
           sourceAddressPrefix: 'VirtualNetwork'
           destinationPortRange: '443'
-          destinationAddressPrefix: 'VirtualNetwork'
+          destinationApplicationSecurityGroups: [
+            {
+              id: keyVaultApplicationSecurityGroup.id
+            }
+          ]
           access: 'Allow'
           priority: 100
           direction: 'Inbound'
