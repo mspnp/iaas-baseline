@@ -298,6 +298,10 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     orchestrationMode: 'Flexible'
     platformFaultDomainCount: 1
     zoneBalance: false
+    automaticRepairsPolicy: {
+      enabled: true
+      gracePeriod: 'PT30M'
+    }
     virtualMachineProfile: {
       diagnosticsProfile: {
         bootDiagnostics: {
@@ -325,15 +329,15 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         osDisk: {
           diffDiskSettings: {
             option: 'Local'
-            placement: 'ResourceDisk'
+            placement: 'CacheDisk'
           }
           caching: 'ReadOnly'
           createOption: 'FromImage'
         }
         imageReference: {
           publisher: 'Canonical'
-          offer: 'UbuntuServer'
-          sku: '18.04-LTS'
+          offer: '0001-com-ubuntu-server-focal'
+          sku: '20_04-lts-gen2'
           version: 'latest'
         }
       }
@@ -524,6 +528,10 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
     orchestrationMode: 'Flexible'
     platformFaultDomainCount: 1
     zoneBalance: false
+    automaticRepairsPolicy: {
+      enabled: true
+      gracePeriod: 'PT30M'
+    }
     virtualMachineProfile: {
       securityProfile: {
         securityType: 'TrustedLaunch'
@@ -561,7 +569,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
           osType: 'Windows'
           diffDiskSettings: {
             option: 'Local'
-            placement: 'ResourceDisk'
+            placement: 'CacheDisk'
           }
           caching: 'ReadOnly'
           createOption: 'FromImage'

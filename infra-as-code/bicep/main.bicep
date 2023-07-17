@@ -70,6 +70,15 @@ var numberOfAvailabilityZones = 3
 
 /*** RESOURCES ***/
 
+//Enable VM insights for Azure Monitor Agent.
+module governanceModule 'governance.bicep' = {
+  name: 'governanceDeploy'
+  params: {
+    location: location
+  }
+  dependsOn: []
+}
+
 // Deploy a vnet and subnets for the vmss, appgateway, load balancers and bastion
 module networkingModule 'networking.bicep' = {
   name: 'networkingDeploy'
