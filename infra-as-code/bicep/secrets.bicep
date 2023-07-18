@@ -6,6 +6,9 @@ targetScope = 'resourceGroup'
 
 /*** PARAMETERS ***/
 
+@description('The resource group name where the AppGw is going to be deployed.')
+param resourceGroupName string = resourceGroup().name
+
 @description('This is the base name for each Azure resource name (6-12 chars)')
 param baseName string
 
@@ -29,6 +32,9 @@ param vnetName string
 @description('The subnet name for the private endpoints.')
 param privateEndpointsSubnetName string
 
+@description('The name of the private endpoint keyvault Application Security Group.')
+param keyVaultApplicationSecurityGroupName string
+
 /*** VARIABLES ***/
 
 var keyVaultName = 'kv-${baseName}'
@@ -37,6 +43,11 @@ var keyVaultDnsGroupName = '${keyVaultPrivateEndpointName}/default'
 var keyVaultDnsZoneName = 'privatelink.vaultcore.azure.net' //Cannot use 'privatelink${environment().suffixes.keyvaultDns}', per https://github.com/Azure/bicep/issues/9708
 
 /*** EXISTING SUBSCRIPTION RESOURCES ***/
+
+resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
+  scope: subscription()
+  name: resourceGroupName
+}
 
 /*** EXISTING RESOURCES ***/
 
@@ -48,6 +59,12 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
   resource privateEndpointsSubnet 'subnets' existing = {
     name: privateEndpointsSubnetName
   }
+}
+
+@description('Application Security Group applied to Key Vault private endpoint.')
+resource keyVaultApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-07-01' existing = {
+  scope: targetResourceGroup
+  name: keyVaultApplicationSecurityGroupName
 }
 
 /*** RESOURCES ***/
@@ -101,6 +118,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
 
 }
 
+@description('Private Endpoint for Key Vault. All resources in the virtual network will use this endpoint when attempting to access Azure KeyVault instance.')
 resource keyVaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
   name: keyVaultPrivateEndpointName
   location: location
@@ -108,6 +126,12 @@ resource keyVaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01'
     subnet: {
       id: vnet::privateEndpointsSubnet.id
     }
+    customNetworkInterfaceName: 'nic-pe-${keyVaultPrivateEndpointName}'
+    applicationSecurityGroups: [
+      {
+        id: keyVaultApplicationSecurityGroup.id
+      }
+    ]
     privateLinkServiceConnections: [
       {
         name: keyVaultPrivateEndpointName

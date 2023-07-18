@@ -267,6 +267,12 @@ resource vmssBackendApplicationSecurityGroup 'Microsoft.Network/applicationSecur
   location: location
 }
 
+@description('Application Security Group applied to Key Vault private endpoint.')
+resource keyVaultApplicationSecurityGroup 'Microsoft.Network/applicationSecurityGroups@2022-11-01' = {
+  name: 'asg-keyvault'
+  location: location
+}
+
 // Default NSG on the vmss frontend. Feel free to constrict further.
 resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
   name: 'nsg-${vnetName}-frontend'
@@ -684,7 +690,11 @@ resource privateLinkEndpointsSubnetNetworkSecurityGroup 'Microsoft.Network/netwo
           sourcePortRange: '*'
           sourceAddressPrefix: 'VirtualNetwork'
           destinationPortRange: '443'
-          destinationAddressPrefix: 'VirtualNetwork'
+          destinationApplicationSecurityGroups: [
+            {
+              id: keyVaultApplicationSecurityGroup.id
+            }
+          ]
           access: 'Allow'
           priority: 100
           direction: 'Inbound'
@@ -1046,3 +1056,5 @@ output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
 
 output vmssFrontendApplicationSecurityGroupName string = vmssFrontendApplicationSecurityGroup.name
 output vmssBackendApplicationSecurityGroupName string = vmssBackendApplicationSecurityGroup.name
+output keyVaultApplicationSecurityGroupName string = keyVaultApplicationSecurityGroup.name
+
