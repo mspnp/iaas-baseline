@@ -344,18 +344,82 @@ resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecuri
         }
       }
       {
-        name: 'AllowAllOutbound'
+        name: 'AllowFrontendToToBackenddApplicationSecurityGroupHTTPSOutbBund'
         properties: {
-          description: 'Allow all outbound'
-          protocol: '*'
+          description: 'Allow frontend ASG outbound traffic to backend ASG 443.'
+          protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 1000
+          sourceApplicationSecurityGroups: [
+            {
+              id: vmssFrontendApplicationSecurityGroup.id
+            }
+          ]
+          destinationPortRange: '443'
+          destinationApplicationSecurityGroups: [
+            {
+              id: vmssBackendApplicationSecurityGroup.id
+            }
+          ]
           direction: 'Outbound'
+          access: 'Allow'
+          priority: 100
         }
+      }
+      {
+          name: 'Allow443ToInternetOutBound'
+          properties: {
+              description: 'Allow VMs to communicate to Azure management APIs, Azure Storage, and perform install tasks.'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '443'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 101
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'Allow80ToInternetOutBound'
+          properties: {
+              description: 'Allow Packer VM to use apt-get to upgrade packages'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '80'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 102
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'AllowVnetOutBound'
+          properties: {
+              description: 'Allow VM to communicate to other devices in the virtual network'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '*'
+              destinationAddressPrefix: 'VirtualNetwork'
+              access: 'Allow'
+              priority: 110
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'DenyAllOutBound'
+          properties: {
+              description: 'Deny all remaining outbound traffic'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: '*'
+              destinationPortRange: '*'
+              destinationAddressPrefix: '*'
+              access: 'Deny'
+              priority: 1000
+              direction: 'Outbound'
+          }
       }
     ]
   }
@@ -382,9 +446,9 @@ resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurit
   properties: {
     securityRules: [
       {
-        name: 'AllowIlbToToBackenddApplicationSecurityGroupHTTPSInbound'
+        name: 'AllowFrontendToToBackenddApplicationSecurityGroupHTTPSInbound'
         properties: {
-          description: 'Allow frontend ASG traffic into 443.'
+          description: 'Allow frontend ASG traffic into backend ASG 443.'
           protocol: 'Tcp'
           sourcePortRange: '*'
           sourceApplicationSecurityGroups: [
@@ -468,18 +532,60 @@ resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurit
         }
       }
       {
-        name: 'AllowAllOutbound'
-        properties: {
-          description: 'Allow all outbound'
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 1000
-          direction: 'Outbound'
-        }
+          name: 'Allow443ToInternetOutBound'
+          properties: {
+              description: 'Allow VMs to communicate to Azure management APIs, Azure Storage, and perform install tasks.'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '443'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 100
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'Allow80ToInternetOutBound'
+          properties: {
+              description: 'Allow Packer VM to use apt-get to upgrade packages'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '80'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 102
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'AllowVnetOutBound'
+          properties: {
+              description: 'Allow VM to communicate to other devices in the virtual network'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '*'
+              destinationAddressPrefix: 'VirtualNetwork'
+              access: 'Allow'
+              priority: 110
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'DenyAllOutBound'
+          properties: {
+              description: 'Deny all remaining outbound traffic'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: '*'
+              destinationPortRange: '*'
+              destinationAddressPrefix: '*'
+              access: 'Deny'
+              priority: 1000
+              direction: 'Outbound'
+          }
       }
     ]
   }
