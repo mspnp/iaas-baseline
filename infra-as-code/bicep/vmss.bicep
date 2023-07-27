@@ -71,6 +71,9 @@ param adminAadSecurityPrincipalObjectId string
 ])
 param adminAddSecurityPrincipalType string
 
+@description('The name of the Azure KeyVault Private DNS Zone.')
+param keyVaultDnsZoneName string
+
 /*** VARIABLES ***/
 
 var vmssBackendSubdomain = 'backend'
@@ -78,6 +81,16 @@ var vmssFrontendSubdomain = 'frontend'
 var vmssFrontendDomainName = '${vmssFrontendSubdomain}.${ingressDomainName}'
 
 var defaultAdminUserName = uniqueString(baseName, resourceGroup().id)
+
+/*** EXISTING GLOBAL RESOURCES ***/
+
+resource keyVaultDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing = {
+  name: keyVaultDnsZoneName
+
+  resource keyVaultDnsZoneLink 'virtualNetworkLinks' existing = {
+    name: '${keyVaultDnsZoneName}-link'
+  }
+}
 
 /*** EXISTING SUBSCRIPTION RESOURCES ***/
 
@@ -500,6 +513,9 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     vmssFrontendSecretsUserRoleRoleAssignmentModule
     vmssFrontendKeyVaultReaderRoleAssignmentModule
     vmssBackend
+    contosoDnsZone::vmssBackendSubdomainARecord
+    contosoDnsZone::vnetlnk
+    keyVaultDnsZone::keyVaultDnsZoneLink
     groupOrUserAdminLoginRoleRoleAssignment
   ]
 }
@@ -772,6 +788,9 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
     internalLoadBalancer
     outboundLoadBalancer
     vmssBackendSecretsUserRoleRoleAssignmentModule
+    contosoDnsZone::vmssBackendSubdomainARecord
+    contosoDnsZone::vnetlnk
+    keyVaultDnsZone::keyVaultDnsZoneLink
     groupOrUserAdminLoginRoleRoleAssignment
   ]
 }

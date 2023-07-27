@@ -143,6 +143,7 @@ module vmssModule 'vmss.bicep' = {
     vmssBackendApplicationSecurityGroupName: networkingModule.outputs.vmssBackendApplicationSecurityGroupName
     adminAadSecurityPrincipalObjectId: adminAadSecurityPrincipalObjectId
     adminAddSecurityPrincipalType: adminAddSecurityPrincipalType
+    keyVaultDnsZoneName: secretsModule.outputs.keyVaultDnsZoneName
   }
   dependsOn: []
 }
