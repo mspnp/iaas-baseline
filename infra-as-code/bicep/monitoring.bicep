@@ -598,6 +598,9 @@ resource linuxVmDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-
     }
     description: 'Default data collection rule for Linux virtual machines.'
   }
+  dependsOn: [
+    changeTrackingTablesSolutions
+  ]
 }
 
 @description('Add data collection rules to Linux virtual machines.')
