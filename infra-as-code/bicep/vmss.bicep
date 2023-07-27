@@ -246,11 +246,11 @@ resource groupOrUserAdminLoginRoleRoleAssignment 'Microsoft.Authorization/roleAs
   }
 }
 
-resource pdzVmss 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+resource contosoDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: ingressDomainName
   location: 'global'
 
-  resource vmssBackendDomainName_backend 'A' = {
+  resource vmssBackendSubdomainARecord 'A' = {
     name: vmssBackendSubdomain
     properties: {
       ttl: 3600
