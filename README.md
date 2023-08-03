@@ -482,6 +482,42 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
 1. In the Azure Portal, navigate to your VMSS resources.
 1. Click _Logs_ to see and query log data.
 
+#### Monitor your Windows VM logs
+
+1. Get the Log Analytics Workspace Id.
+
+   ```bash
+   LA_WORKSPACEID=$(az deployment group show -g rg-iaas -n main --query properties.outputs.logAnalyticsWorkspaceId.value -o tsv)
+   echo LA_WORKSPACEID: $LA_WORKSPACEID
+   ```
+
+1. Check your Azure Monitor Agents within the last three minutes sent heartbeats to Log Analytics
+
+   ```bash
+   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "Heartbeat | where TimeGenerated > ago(3m) | where ResourceGroup has 'rg-iaas' | project  Computer, TimeGenerated, Category, Version | order by TimeGenerated desc" -o tabke
+   ```
+
+   ```output
+   Category             Computer        TableName      TimeGenerated                 Version
+   -------------------  --------------  -------------  ----------------------------  ---------
+   Azure Monitor Agent  frontend33W1H1  PrimaryResult  2023-08-03T18:23:53.9882669Z  1.27.4
+   Azure Monitor Agent  frontendUZHWTP  PrimaryResult  2023-08-03T18:23:52.5931826Z  1.27.4
+   Azure Monitor Agent  frontendF6YYWG  PrimaryResult  2023-08-03T18:23:38.2812975Z  1.27.4
+   Azure Monitor Agent  backendRZRPWY   PrimaryResult  2023-08-03T18:23:29.5531509Z  1.18.0.0
+   Azure Monitor Agent  frontend33W1H1  PrimaryResult  2023-08-03T18:22:54.0179506Z  1.27.4
+   Azure Monitor Agent  frontendUZHWTP  PrimaryResult  2023-08-03T18:22:52.6105985Z  1.27.4
+   Azure Monitor Agent  frontendF6YYWG  PrimaryResult  2023-08-03T18:22:38.2799208Z  1.27.4
+   Azure Monitor Agent  backendYDTYW7   PrimaryResult  2023-08-03T18:22:30.6282239Z  1.18.0.0
+   Azure Monitor Agent  backendRZRPWY   PrimaryResult  2023-08-03T18:22:29.5507687Z  1.18.0.0
+   ...
+   ```
+
+1. Query your DCR based custom table to check if any custom logs have been received
+
+   ```bash
+   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "WindowsLogsTable_CL | where TimeGenerated > ago(48h) | order by TimeGenerated desc" -t P3DT12H
+   ```
+
 ## :broom: Clean up resources
 
 Most of the Azure resources deployed in the prior steps will incur ongoing charges unless removed.
