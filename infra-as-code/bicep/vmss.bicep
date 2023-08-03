@@ -106,12 +106,6 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2018-0
   scope: subscription()
 }
 
-// Built-in Azure RBAC role that is applied to a Log Anlytics Workspace to grant with contrib access privileges. Granted to both frontend and backend user managed identities.
-resource logAnalyticsContributorUserRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
-  name: '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
-  scope: subscription()
-}
-
 @description('Built-in Azure RBAC role that is applied to the virtual machines to grant remote user access to them via SSH or RDP. Granted to the provided group object id.')
 resource virtualMachineAdminLoginRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
   scope: subscription()
@@ -205,17 +199,6 @@ module vmssFrontendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAss
   }
 }
 
-// Grant the Vmss Frontend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
-resource vmssFrontendContributorUserRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'id-vm-frontend', logAnalyticsContributorUserRole.id)
-  properties: {
-    roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: vmssFrontendManagedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
 // Grant the Vmss Backend managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
 module vmssBackendSecretsUserRoleRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
   name: guid(resourceGroup().id, 'id-vm-backend', keyVaultSecretsUserRole.id)
@@ -233,17 +216,6 @@ module vmssBackendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssi
     roleDefinitionId: keyVaultReaderRole.id
     principalId: vmssBackendManagedIdentity.properties.principalId
     keyVaultName: keyVaultName
-  }
-}
-
-// Grant the Vmss Backend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
-resource vmssBackendContributorUserRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'id-vm-backend', logAnalyticsContributorUserRole.id)
-  properties: {
-    roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: vmssBackendManagedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 
