@@ -18,7 +18,7 @@ server {
     server_name frontend.iaas-ingress.contoso.com;
     ssl_certificate /etc/ssl/certs/nginx-ingress-internal-iaas-ingress-tls.crt;
     ssl_certificate_key /etc/ssl/private/nginx-ingress-internal-iaas-ingress-tls.key;
-    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_protocols TLSv1.2;
 
     location / {
         proxy_pass https://backend.iaas-ingress.contoso.com/;
