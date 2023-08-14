@@ -164,7 +164,7 @@ resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectio
             'Custom-WindowsLogsTable_CL'
           ]
           filePatterns: [
-             'W:\\nginx\\data\\*.data'
+             'W:\\nginx\\data\\*.log'
           ]
           format: 'text'
           settings: {
