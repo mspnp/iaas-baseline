@@ -494,7 +494,7 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
 1. Check your Azure Monitor Agents within the last three minutes sent heartbeats to Log Analytics
 
    ```bash
-   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "Heartbeat | where TimeGenerated > ago(3m) | where ResourceGroup has 'rg-iaas' | project  Computer, TimeGenerated, Category, Version | order by TimeGenerated desc" -o tabke
+   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "Heartbeat | where TimeGenerated > ago(3m) | where ResourceGroup has 'rg-iaas' | project  Computer, TimeGenerated, Category, Version | order by TimeGenerated desc" -o table
    ```
 
    ```output
@@ -515,8 +515,20 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
 1. Query your DCR based custom table to check if any custom logs have been received
 
    ```bash
-   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "WindowsLogsTable_CL | where TimeGenerated > ago(48h) | order by TimeGenerated desc" -t P3DT12H
+   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "WindowsLogsTable_CL | where TimeGenerated > ago(48h) | project RawData, TimeGenerated, _ResourceId | order by TimeGenerated desc" -t P3DT12H -o table
    ```
+
+   ```output
+   RawData    TableName      TimeGenerated                 _ResourceId
+   ---------  -------------  ----------------------------  --------------------------------------------------------------------------------------------------------------------------------------------
+   1          PrimaryResult  2023-08-11T22:42:08.512889Z   /subscriptions/<YOUR_SUBSCRIPTION>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_db0f110a
+   1          PrimaryResult  2023-08-11T21:20:09.2787806Z  /subscriptions/<YOUR_SUBSCRIPTION>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_4e493a47
+   ...
+   ```
+
+   :book: RawData column will list the number of visits your backend VM has served at the time the log is collected from the agent machine.
+
+   :warning: it might take some time to sink your logs into Log Analytics
 
 ## :broom: Clean up resources
 
