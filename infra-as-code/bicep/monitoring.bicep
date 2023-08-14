@@ -132,12 +132,12 @@ resource windowsVmLogsDataCollectionEndpoints 'Microsoft.Insights/dataCollection
     configurationAccess: {}
     logsIngestion: {}
     networkAcls: {
-      publicNetworkAccess: 'Disabled'
+      publicNetworkAccess: 'Enabled'
     }
   }
 }
 
-resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
+resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2021-09-01-preview' = {
   name: 'dcrWindowsLogs'
   location: location
   kind: 'Windows'
@@ -164,15 +164,15 @@ resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectio
             'Custom-WindowsLogsTable_CL'
           ]
           filePatterns: [
-             'w:\\nginx\\data\\*.data'
+             'W:\\nginx\\data\\*.data'
           ]
           format: 'text'
           settings: {
             text: {
-              recordStartTimestampFormat: 'ISO 8601'
+              recordStartTimestampFormat: 'yyyy-MM-ddTHH:mm:ssK'
             }
           }
-          name: 'backendLogFileFormat-Windows'
+          name: 'Custom-WindowsLogsTable_CL'
         }
       ]
     }
