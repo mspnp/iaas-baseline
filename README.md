@@ -519,16 +519,15 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
    ```
 
    ```output
-   RawData    TableName      TimeGenerated                 _ResourceId
-   ---------  -------------  ----------------------------  --------------------------------------------------------------------------------------------------------------------------------------------
-   1          PrimaryResult  2023-08-11T22:42:08.512889Z   /subscriptions/<YOUR_SUBSCRIPTION>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_db0f110a
-   1          PrimaryResult  2023-08-11T21:20:09.2787806Z  /subscriptions/<YOUR_SUBSCRIPTION>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_4e493a47
+   RawData                                                                    TableName      TimeGenerated                 _ResourceId
+   ------------------------------------------------------------------------   -------------  ----------------------------  --------------------------------------------------------------------------------------------------------------------------------------------
+   10.240.0.4 - - [15/Aug/2023:14:54:38 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:58:00.3130909Z  /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_57752db5
+   10.240.0.6 - - [15/Aug/2023:14:54:40 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:58:00.3130909Z  /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_57752db5
+   10.240.0.5 - - [15/Aug/2023:14:54:38 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:57:46.269107Z   /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_9949700b
    ...
    ```
 
-   :book: RawData column will list the number of visits your backend VM has served at the time the log is collected from the agent machine.
-
-   :warning: it might take some time to sink your logs into Log Analytics
+   :warning: it might take some time to sink logs into Log Analytics.
 
 ## :broom: Clean up resources
 
