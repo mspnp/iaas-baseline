@@ -19,7 +19,7 @@ targetScope = 'resourceGroup'
   'japaneast'
   'southeastasia'
 ])
-@description('The spokes\'s regional affinity, must be the same as the hub\'s location. All resources tied to this spoke will also be homed in this region. The network team maintains this approved regional list which is a subset of zones with Availability Zone support.')
+@description('Region on which to create the VNnet. All resources tied to this VNnet will also be homed in this region. The region passed as a parameter is assumed to have Availability Zone support.')
 param location string
 
 @description('The Azure Log Analytics Workspace name.')
