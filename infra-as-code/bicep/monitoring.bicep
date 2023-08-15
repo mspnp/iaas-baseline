@@ -230,7 +230,7 @@ resource configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment 'Mic
   dependsOn: []
 }
 
-@description('Ensure the managed identity for logs DCR DINE policies is has needed permissions.')
+@description('Ensure the managed identity for logs DCR DINE policies has the required permissions.')
 resource dineWindowsLogsDcrPolicyLogAnalyticsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: resourceGroup()
   name: guid(resourceGroup().id, logAnalyticsContributorRole.id, configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment.id)
@@ -241,7 +241,7 @@ resource dineWindowsLogsDcrPolicyLogAnalyticsRoleAssignment 'Microsoft.Authoriza
   }
 }
 
-@description('Ensure the managed identity for logs DCR DINE policies is has needed permissions.')
+@description('Ensure the managed identity for logs DCR DINE policies has the required permissions.')
 resource dineWindowsLogsDcrPolicyMonitoringContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: resourceGroup()
   name: guid(resourceGroup().id, monitoringContributorRole.id, configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment.id)
