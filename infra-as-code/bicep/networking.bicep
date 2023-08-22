@@ -19,7 +19,7 @@ targetScope = 'resourceGroup'
   'japaneast'
   'southeastasia'
 ])
-@description('Region on which to create the VNnet. All resources tied to this VNnet will also be homed in this region. The region passed as a parameter is assumed to have Availability Zone support.')
+@description('Region on which to create the VNet. All resources tied to this VNet will also be homed in this region. The region passed as a parameter is assumed to have Availability Zone support.')
 param location string
 
 @description('The Azure Log Analytics Workspace name.')
