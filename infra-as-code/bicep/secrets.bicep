@@ -80,6 +80,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     tenantId: tenant().tenantId
+    publicNetworkAccess: 'Disabled'
     createMode: 'default'
     accessPolicies: [] // Azure RBAC is used instead
     sku: {
@@ -194,3 +195,6 @@ output gatewayTrustedRootSSLCertSecretUri string = keyVault::kvsAppGwInternalVms
 
 @description('Uri to the secret holding the vmss wildcard cert.')
 output vmssWorkloadPublicAndPrivatePublicCertsSecretUri string = keyVault::kvsWorkloadPublicAndPrivatePublicCerts.properties.secretUri
+
+@description('The name of the Azure KeyVault Private DNS Zone.')
+output keyVaultDnsZoneName string =  keyVaultDnsZone.name

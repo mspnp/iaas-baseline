@@ -19,8 +19,11 @@ targetScope = 'resourceGroup'
   'japaneast'
   'southeastasia'
 ])
-@description('The spokes\'s regional affinity, must be the same as the hub\'s location. All resources tied to this spoke will also be homed in this region. The network team maintains this approved regional list which is a subset of zones with Availability Zone support.')
+@description('Region on which to create the VNet. All resources tied to this VNet will also be homed in this region. The region passed as a parameter is assumed to have Availability Zone support.')
 param location string
+
+@description('The Azure Log Analytics Workspace name.')
+param logAnalyticsWorkspaceName string
 
 /*** VARIABLES ***/
 // A designator that represents a business unit id and application id
@@ -28,47 +31,10 @@ var vnetName = 'vnet'
 
 /*** RESOURCES ***/
 
-// This Log Analytics workspace stores logs from the regional spokes network, and bastion.
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
-  name: 'log-${location}'
-  location: location
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-    publicNetworkAccessForIngestion: 'Enabled'
-    publicNetworkAccessForQuery: 'Enabled'
-    forceCmkForQuery: false
-    features: {
-      disableLocalAuth: false
-      enableDataExport: false
-      enableLogAccessUsingOnlyResourcePermissions: false
-    }
-    workspaceCapping: {
-      dailyQuotaGb: -1
-    }
-  }
-}
-
-resource logAnalyticsWorkspaceDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'default'
-  scope:logAnalyticsWorkspace
-  properties: {
-    workspaceId: logAnalyticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'audit'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
-  }
+// Log Analytics Workspace
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  scope: resourceGroup()
+  name: logAnalyticsWorkspaceName
 }
 
 // NSG around the Azure Bastion Subnet.
@@ -344,18 +310,82 @@ resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecuri
         }
       }
       {
-        name: 'AllowAllOutbound'
+        name: 'AllowFrontendToToBackenddApplicationSecurityGroupHTTPSOutbBund'
         properties: {
-          description: 'Allow all outbound'
-          protocol: '*'
+          description: 'Allow frontend ASG outbound traffic to backend ASG 443.'
+          protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 1000
+          sourceApplicationSecurityGroups: [
+            {
+              id: vmssFrontendApplicationSecurityGroup.id
+            }
+          ]
+          destinationPortRange: '443'
+          destinationApplicationSecurityGroups: [
+            {
+              id: vmssBackendApplicationSecurityGroup.id
+            }
+          ]
           direction: 'Outbound'
+          access: 'Allow'
+          priority: 100
         }
+      }
+      {
+          name: 'Allow443ToInternetOutBound'
+          properties: {
+              description: 'Allow VMs to communicate to Azure management APIs, Azure Storage, and perform install tasks.'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '443'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 101
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'Allow80ToInternetOutBound'
+          properties: {
+              description: 'Allow Packer VM to use apt-get to upgrade packages'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '80'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 102
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'AllowVnetOutBound'
+          properties: {
+              description: 'Allow VM to communicate to other devices in the virtual network'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '*'
+              destinationAddressPrefix: 'VirtualNetwork'
+              access: 'Allow'
+              priority: 110
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'DenyAllOutBound'
+          properties: {
+              description: 'Deny all remaining outbound traffic'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: '*'
+              destinationPortRange: '*'
+              destinationAddressPrefix: '*'
+              access: 'Deny'
+              priority: 1000
+              direction: 'Outbound'
+          }
       }
     ]
   }
@@ -382,9 +412,9 @@ resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurit
   properties: {
     securityRules: [
       {
-        name: 'AllowIlbToToBackenddApplicationSecurityGroupHTTPSInbound'
+        name: 'AllowFrontendToToBackenddApplicationSecurityGroupHTTPSInbound'
         properties: {
-          description: 'Allow frontend ASG traffic into 443.'
+          description: 'Allow frontend ASG traffic into backend ASG 443.'
           protocol: 'Tcp'
           sourcePortRange: '*'
           sourceApplicationSecurityGroups: [
@@ -468,18 +498,60 @@ resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurit
         }
       }
       {
-        name: 'AllowAllOutbound'
-        properties: {
-          description: 'Allow all outbound'
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 1000
-          direction: 'Outbound'
-        }
+          name: 'Allow443ToInternetOutBound'
+          properties: {
+              description: 'Allow VMs to communicate to Azure management APIs, Azure Storage, and perform install tasks.'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '443'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 100
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'Allow80ToInternetOutBound'
+          properties: {
+              description: 'Allow Packer VM to use apt-get to upgrade packages'
+              protocol: 'Tcp'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '80'
+              destinationAddressPrefix: 'Internet'
+              access: 'Allow'
+              priority: 102
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'AllowVnetOutBound'
+          properties: {
+              description: 'Allow VM to communicate to other devices in the virtual network'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: 'VirtualNetwork'
+              destinationPortRange: '*'
+              destinationAddressPrefix: 'VirtualNetwork'
+              access: 'Allow'
+              priority: 110
+              direction: 'Outbound'
+          }
+      }
+      {
+          name: 'DenyAllOutBound'
+          properties: {
+              description: 'Deny all remaining outbound traffic'
+              protocol: '*'
+              sourcePortRange: '*'
+              sourceAddressPrefix: '*'
+              destinationPortRange: '*'
+              destinationAddressPrefix: '*'
+              access: 'Deny'
+              priority: 1000
+              direction: 'Outbound'
+          }
       }
     ]
   }
