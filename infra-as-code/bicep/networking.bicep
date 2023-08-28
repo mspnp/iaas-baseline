@@ -19,11 +19,8 @@ targetScope = 'resourceGroup'
   'japaneast'
   'southeastasia'
 ])
-@description('Region on which to create the VNet. All resources tied to this VNet will also be homed in this region. The region passed as a parameter is assumed to have Availability Zone support.')
+@description('The spokes\'s regional affinity, must be the same as the hub\'s location. All resources tied to this spoke will also be homed in this region. The network team maintains this approved regional list which is a subset of zones with Availability Zone support.')
 param location string
-
-@description('The Azure Log Analytics Workspace name.')
-param logAnalyticsWorkspaceName string
 
 /*** VARIABLES ***/
 // A designator that represents a business unit id and application id
@@ -31,10 +28,47 @@ var vnetName = 'vnet'
 
 /*** RESOURCES ***/
 
-// Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
-  name: logAnalyticsWorkspaceName
+// This Log Analytics workspace stores logs from the regional spokes network, and bastion.
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+  name: 'log-${location}'
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+    forceCmkForQuery: false
+    features: {
+      disableLocalAuth: false
+      enableDataExport: false
+      enableLogAccessUsingOnlyResourcePermissions: false
+    }
+    workspaceCapping: {
+      dailyQuotaGb: -1
+    }
+  }
+}
+
+resource logAnalyticsWorkspaceDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'default'
+  scope:logAnalyticsWorkspace
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'audit'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
 }
 
 // NSG around the Azure Bastion Subnet.

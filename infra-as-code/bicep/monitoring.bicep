@@ -5,6 +5,9 @@ targetScope = 'resourceGroup'
 @description('The resource group location')
 param location string = resourceGroup().location
 
+@description('The Azure Log Analytics Workspace name.')
+param logAnalyticsWorkspaceName string
+
 /*** VARIABLES ***/
 
 @description('Consistent prefix on all assignments to facilitate deleting assignments in the cleanup process.')
@@ -38,69 +41,13 @@ resource configureWindowsMachinesWithDataCollectionRulePolicy 'Microsoft.Authori
   name: 'eab1f514-22e3-42e3-9a1f-e1dc9199355c'
 }
 
+// Log Analytics Workspace
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  scope: resourceGroup()
+  name: logAnalyticsWorkspaceName
+}
+
 /*** RESOURCES ***/
-
-// This Log Analytics workspace stores logs from the regional spokes network, and bastion.
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: 'log-${location}'
-  location: location
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-    publicNetworkAccessForIngestion: 'Enabled'
-    publicNetworkAccessForQuery: 'Enabled'
-    forceCmkForQuery: false
-    features: {
-      disableLocalAuth: false
-      enableDataExport: false
-      enableLogAccessUsingOnlyResourcePermissions: false
-    }
-    workspaceCapping: {
-      dailyQuotaGb: -1
-    }
-  }
-
-  resource windowsLogsCustomTable 'tables' = {
-    name: 'WindowsLogsTable_CL'
-    properties: {
-      schema: {
-        columns: [
-          {
-            name: 'TimeGenerated'
-            type: 'DateTime'
-          }
-          {
-            name: 'RawData'
-            type: 'String'
-          }
-        ]
-        name: 'WindowsLogsTable_CL'
-      }
-    }
-  }
-}
-
-resource logAnalyticsWorkspaceDiagnosticsSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'default'
-  scope:logAnalyticsWorkspace
-  properties: {
-    workspaceId: logAnalyticsWorkspace.id
-    logs: [
-      {
-        categoryGroup: 'audit'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
-  }
-}
 
 @description('Ensure the managed identity for DCR DINE policies is has needed permissions.')
 resource dineLinuxDcrPolicyLogAnalyticsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -119,134 +66,6 @@ resource dineLinuxDcrPolicyMonitoringContributorRoleAssignment 'Microsoft.Author
   name: guid(resourceGroup().id, monitoringContributorRole.id, configureLinuxMachinesWithDataCollectionRulePolicyAssignment.id)
   properties: {
     principalId: configureLinuxMachinesWithDataCollectionRulePolicyAssignment.identity.principalId
-    roleDefinitionId: monitoringContributorRole.id
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource windowsVmLogsDataCollectionEndpoints 'Microsoft.Insights/dataCollectionEndpoints@2021-09-01-preview' = {
-  name: 'dceWindowsLogs'
-  location: location
-  kind: 'Windows'
-  properties: {
-    configurationAccess: {}
-    logsIngestion: {}
-    networkAcls: {
-      publicNetworkAccess: 'Enabled'
-    }
-  }
-}
-
-resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2021-09-01-preview' = {
-  name: 'dcrWindowsLogs'
-  location: location
-  kind: 'Windows'
-  properties: {
-    dataCollectionEndpointId: windowsVmLogsDataCollectionEndpoints.id
-    streamDeclarations: {
-      'Custom-WindowsLogsTable_CL': {
-        columns: [
-          {
-            name: 'TimeGenerated'
-            type: 'datetime'
-          }
-          {
-            name: 'RawData'
-            type: 'string'
-          }
-        ]
-      }
-    }
-    dataSources: {
-      logFiles: [
-        {
-          streams: [
-            'Custom-WindowsLogsTable_CL'
-          ]
-          filePatterns: [
-             'W:\\nginx\\data\\*.log'
-          ]
-          format: 'text'
-          settings: {
-            text: {
-              recordStartTimestampFormat: 'yyyy-MM-ddTHH:mm:ssK'
-            }
-          }
-          name: 'Custom-WindowsLogsTable_CL'
-        }
-      ]
-    }
-    dataFlows: [
-      {
-        streams: [
-          'Custom-WindowsLogsTable_CL'
-        ]
-        destinations: [
-          logAnalyticsWorkspace.name
-        ]
-        transformKql: 'source | extend TimeGenerated = now()'
-        outputStream: 'Custom-WindowsLogsTable_CL'
-      }
-    ]
-    destinations: {
-      logAnalytics: [
-        {
-          name: logAnalyticsWorkspace.name
-          workspaceResourceId: logAnalyticsWorkspace.id
-        }
-      ]
-    }
-    description: 'Default data collection rule for Windows virtual machine logs.'
-  }
-  dependsOn: [
-    logAnalyticsWorkspace::windowsLogsCustomTable
-  ]
-}
-
-@description('Add logs data collection rules to Windows virtual machines.')
-resource configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment 'Microsoft.Authorization/policyAssignments@2022-06-01' = {
-  name: guid('workload', 'dca-windows-logs', configureWindowsMachinesWithDataCollectionRulePolicy.id, resourceGroup().id)
-  location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    displayName: take('${policyAssignmentNamePrefix} Configure Windows virtual machines with logs data collection rules', 120)
-    description: take(configureWindowsMachinesWithDataCollectionRulePolicy.properties.description, 500)
-    enforcementMode: 'Default'
-    policyDefinitionId: configureWindowsMachinesWithDataCollectionRulePolicy.id
-    parameters: {
-      effect: {
-        value: 'DeployIfNotExists'
-      }
-      dcrResourceId: {
-        value: windowsVmLogsCustomDataCollectionRule.id
-      }
-      resourceType: {
-        value: windowsVmLogsCustomDataCollectionRule.type
-      }
-    }
-  }
-  dependsOn: []
-}
-
-@description('Ensure the managed identity for logs DCR DINE policies has the required permissions.')
-resource dineWindowsLogsDcrPolicyLogAnalyticsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, logAnalyticsContributorRole.id, configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment.id)
-  properties: {
-    principalId: configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment.identity.principalId
-    roleDefinitionId: logAnalyticsContributorRole.id
-    principalType: 'ServicePrincipal'
-  }
-}
-
-@description('Ensure the managed identity for logs DCR DINE policies has the required permissions.')
-resource dineWindowsLogsDcrPolicyMonitoringContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, monitoringContributorRole.id, configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment.id)
-  properties: {
-    principalId: configureWindowsMachinesWithLogsDataCollectionRulePolicyAssignment.identity.principalId
     roleDefinitionId: monitoringContributorRole.id
     principalType: 'ServicePrincipal'
   }
@@ -811,5 +630,3 @@ resource configureLinuxMachinesWithDataCollectionRulePolicyAssignment 'Microsoft
 }
 
 /*** OUTPUTS ***/
-output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
-output logAnalyticsWorkspaceId string = logAnalyticsWorkspace.properties.customerId

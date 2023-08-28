@@ -84,7 +84,6 @@ module networkingModule 'networking.bicep' = {
   name: 'networkingDeploy'
   params: {
     location: location
-    logAnalyticsWorkspaceName: monitoringModule.outputs.logAnalyticsWorkspaceName
   }
 }
 
@@ -138,7 +137,7 @@ module vmssModule 'vmss.bicep' = {
     agwName: gatewayModule.outputs.appGatewayName
     ilbName: internalLoadBalancerModule.outputs.ilbName
     olbName: outboundLoadBalancerModule.outputs.olbName
-    logAnalyticsWorkspaceName: monitoringModule.outputs.logAnalyticsWorkspaceName
+    logAnalyticsWorkspaceName: networkingModule.outputs.logAnalyticsWorkspaceName
     adminPassword: adminPassword
     vmssFrontendApplicationSecurityGroupName: networkingModule.outputs.vmssFrontendApplicationSecurityGroupName
     vmssBackendApplicationSecurityGroupName: networkingModule.outputs.vmssBackendApplicationSecurityGroupName
@@ -169,7 +168,7 @@ module outboundLoadBalancerModule 'outboundloadbalancer.bicep' = {
     location: location
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
-    logAnalyticsWorkspaceName: monitoringModule.outputs.logAnalyticsWorkspaceName
+    logAnalyticsWorkspaceName: networkingModule.outputs.logAnalyticsWorkspaceName
   }
   dependsOn: []
 }
@@ -179,6 +178,7 @@ module monitoringModule 'monitoring.bicep' = {
   name: 'monitoringDeploy'
   params: {
     location: location
+    logAnalyticsWorkspaceName: networkingModule.outputs.logAnalyticsWorkspaceName
   }
   dependsOn: []
 }
@@ -188,4 +188,3 @@ output keyVaultName string = secretsModule.outputs.keyVaultName
 output appGwPublicIpAddress string = networkingModule.outputs.appGwPublicIpAddress
 output bastionHostName string = networkingModule.outputs.bastionHostName
 output backendAdminUserName string = vmssModule.outputs.backendAdminUserName
-output logAnalyticsWorkspaceId string = monitoringModule.outputs.logAnalyticsWorkspaceId
