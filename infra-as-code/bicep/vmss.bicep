@@ -71,6 +71,9 @@ param adminAadSecurityPrincipalObjectId string
 ])
 param adminAddSecurityPrincipalType string
 
+@description('The name of the Azure KeyVault Private DNS Zone.')
+param keyVaultDnsZoneName string
+
 /*** VARIABLES ***/
 
 var vmssBackendSubdomain = 'backend'
@@ -78,6 +81,16 @@ var vmssFrontendSubdomain = 'frontend'
 var vmssFrontendDomainName = '${vmssFrontendSubdomain}.${ingressDomainName}'
 
 var defaultAdminUserName = uniqueString(baseName, resourceGroup().id)
+
+/*** EXISTING GLOBAL RESOURCES ***/
+
+resource keyVaultDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing = {
+  name: keyVaultDnsZoneName
+
+  resource keyVaultDnsZoneLink 'virtualNetworkLinks' existing = {
+    name: '${keyVaultDnsZoneName}-link'
+  }
+}
 
 /*** EXISTING SUBSCRIPTION RESOURCES ***/
 
@@ -90,12 +103,6 @@ resource keyVaultReaderRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-
 // Built-in Azure RBAC role that is applied to a Key Vault to grant with secrets content read privileges. Granted to both Key Vault and our workload's identity.
 resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
   name: '4633458b-17de-408a-b874-0445c86b69e6'
-  scope: subscription()
-}
-
-// Built-in Azure RBAC role that is applied to a Log Anlytics Workspace to grant with contrib access privileges. Granted to both frontend and backend user managed identities.
-resource logAnalyticsContributorUserRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
-  name: '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
   scope: subscription()
 }
 
@@ -192,17 +199,6 @@ module vmssFrontendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAss
   }
 }
 
-// Grant the Vmss Frontend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
-resource vmssFrontendContributorUserRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'id-vm-frontend', logAnalyticsContributorUserRole.id)
-  properties: {
-    roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: vmssFrontendManagedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
 // Grant the Vmss Backend managed identity with key vault secrets role permissions; this allows pulling frontend and backend certificates.
 module vmssBackendSecretsUserRoleRoleAssignmentModule './modules/keyvaultRoleAssignment.bicep' = {
   name: guid(resourceGroup().id, 'id-vm-backend', keyVaultSecretsUserRole.id)
@@ -223,17 +219,6 @@ module vmssBackendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssi
   }
 }
 
-// Grant the Vmss Backend managed identity with Log Analytics Contributor role permissions; this allows pushing data with the Azure Monitor Agent to Log Analytics.
-resource vmssBackendContributorUserRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'id-vm-backend', logAnalyticsContributorUserRole.id)
-  properties: {
-    roleDefinitionId: logAnalyticsContributorUserRole.id
-    principalId: vmssBackendManagedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
 @description('Sets up the provided object id that belongs to a group or user to have access to authenticate into virtual machines with the AAD login extension installed in this resource group.')
 resource groupOrUserAdminLoginRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: resourceGroup()
@@ -246,11 +231,11 @@ resource groupOrUserAdminLoginRoleRoleAssignment 'Microsoft.Authorization/roleAs
   }
 }
 
-resource pdzVmss 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+resource contosoDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   name: ingressDomainName
   location: 'global'
 
-  resource vmssBackendDomainName_backend 'A' = {
+  resource vmssBackendSubdomainARecord 'A' = {
     name: vmssBackendSubdomain
     properties: {
       ttl: 3600
@@ -340,6 +325,18 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
           sku: '20_04-lts-gen2'
           version: 'latest'
         }
+        dataDisks: [
+          {
+            caching: 'None'
+            createOption: 'Empty'
+            deleteOption: 'Delete'
+            diskSizeGB: 4
+            lun: 0
+            managedDisk: {
+              storageAccountType: 'Premium_LRS'
+            }
+          }
+        ]
       }
       networkProfile: {
         networkApiVersion: '2020-11-01'
@@ -500,6 +497,9 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
     vmssFrontendSecretsUserRoleRoleAssignmentModule
     vmssFrontendKeyVaultReaderRoleAssignmentModule
     vmssBackend
+    contosoDnsZone::vmssBackendSubdomainARecord
+    contosoDnsZone::vnetlnk
+    keyVaultDnsZone::keyVaultDnsZoneLink
     groupOrUserAdminLoginRoleRoleAssignment
   ]
 }
@@ -596,7 +596,6 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
               storageAccountType: 'Premium_LRS'
             }
           }
-
         ]
       }
       networkProfile: {
@@ -772,6 +771,9 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
     internalLoadBalancer
     outboundLoadBalancer
     vmssBackendSecretsUserRoleRoleAssignmentModule
+    contosoDnsZone::vmssBackendSubdomainARecord
+    contosoDnsZone::vnetlnk
+    keyVaultDnsZone::keyVaultDnsZoneLink
     groupOrUserAdminLoginRoleRoleAssignment
   ]
 }
