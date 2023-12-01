@@ -37,6 +37,9 @@ param keyVaultName string
 @description('The backend domain name.')
 param ingressDomainName string
 
+@description('The Azure Log Analytics Workspace name.')
+param logAnalyticsWorkspaceName string
+
 /*** VARIABLES ***/
 
 var agwName = 'agw-${baseName}'
@@ -69,6 +72,12 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
     name: appGatewaySubnetName
   }
 
+}
+
+// Log Analytics Workspace
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  scope: resourceGroup()
+  name: logAnalyticsWorkspaceName
 }
 
 /*** RESOURCES ***/
@@ -283,6 +292,27 @@ resource appGateway 'Microsoft.Network/applicationGateways@2021-05-01' = {
     appGatewaySecretsUserRoleAssignmentModule
     appGatewayReaderRoleAssignmentModule
   ]
+}
+
+// App Gateway diagnostics
+resource appGatewayDiagSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${appGateway.name}-diagnosticSettings'
+  scope: appGateway
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
 }
 
 /*** OUTPUTS ***/
