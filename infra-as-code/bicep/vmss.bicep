@@ -593,7 +593,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
             diskSizeGB: 4
             lun: 0
             managedDisk: {
-              storageAccountType: 'Premium_LRS'
+              storageAccountType: 'Premium_ZRS'
             }
           }
         ]
