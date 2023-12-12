@@ -159,6 +159,7 @@ module internalLoadBalancerModule 'internalloadbalancer.bicep' = {
     internalLoadBalancerSubnetName: networkingModule.outputs.internalLoadBalancerSubnetName
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
+    logAnalyticsWorkspaceName: monitoringModule.outputs.logAnalyticsWorkspaceName
   }
   dependsOn: []
 }
