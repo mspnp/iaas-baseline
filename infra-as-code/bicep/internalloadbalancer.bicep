@@ -33,7 +33,6 @@ var ilbName = 'ilb-${baseName}'
 
 // Log Analytics Workspace
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
   name: logAnalyticsWorkspaceName
 }
 
@@ -112,7 +111,7 @@ resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
 
 // Internal Load Balancer diagnostics
 resource internalLoadBalancerDiagSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: '${internalLoadBalancer.name}-diagnosticSettings'
+  name: 'default'
   scope: internalLoadBalancer
   properties: {
     workspaceId: logAnalyticsWorkspace.id

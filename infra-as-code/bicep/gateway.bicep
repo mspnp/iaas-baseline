@@ -76,7 +76,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
 
 // Log Analytics Workspace
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
-  scope: resourceGroup()
   name: logAnalyticsWorkspaceName
 }
 
@@ -296,7 +295,7 @@ resource appGateway 'Microsoft.Network/applicationGateways@2021-05-01' = {
 
 // App Gateway diagnostics
 resource appGatewayDiagSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: '${appGateway.name}-diagnosticSettings'
+  name: 'default'
   scope: appGateway
   properties: {
     workspaceId: logAnalyticsWorkspace.id
