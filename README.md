@@ -80,6 +80,7 @@ There are considerations that must be addressed before you start deploying your 
    ```bash
    echo "${TENANTS}" | grep -z ${TENANTID_AZSUBSCRIPTION_IAAS_BASELINE}
    ```
+
    :warning: Do not procced if the tenant highlighted in red is not correct. Start over by `az login` into the proper Azure subscription.
 
 1. The user or service principal initiating the deployment process _must_ have the following minimal set of Azure Role-Based Access Control (RBAC) roles:
@@ -278,7 +279,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    vmss-frontend_47a941aa  frontendJVSX4A  ['AzureMonitorLinuxAgent', 'KeyVaultForLinux', 'HealthExtension', 'DependencyAgentLinux', 'AADSSHLogin', 'CustomScript']
    ```
 
-   :bulb: From some of the extension names in `Column3` you can easily spot that the backend VMs are `Windows` machines and the frontend VMs are `Linux` machines. For more information about the VM extensions please take a look at https://learn.microsoft.com/azure/virtual-machines/extensions/overview
+   :bulb: From some of the extension names in `Column3` you can easily spot that the backend VMs are `Windows` machines and the frontend VMs are `Linux` machines. For more information about the VM extensions please take a look at <https://learn.microsoft.com/azure/virtual-machines/extensions/overview>.
 
 1. Query Heath Extension substatus for your Frontend VMs and see whether your application is healthy
 
@@ -405,6 +406,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    ```bash
    exit
    ```
+
 We perform the prior steps manually here for you to understand the involved components, but we advocate for an automated DevOps process. Therefore, incorporate the prior steps into your CI/CD pipeline, as you would any infrastructure as code (IaC).
 
 ### 5. :checkered_flag: Validation
@@ -475,7 +477,7 @@ Your workload is placed behind a Web Application Firewall (WAF), which has rules
    ```
 
 1. In the Azure Portal, navigate to your VM resources.
-1. Click _Insights_ to see captured data. For more infomation please take a look at https://learn.microsoft.com/azure/azure-monitor/vm/vminsights-overview
+1. Click _Insights_ to see captured data. For more infomation please take a look at <https://learn.microsoft.com/azure/azure-monitor/vm/vminsights-overview>.
 
 You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-tutorial) on the [VM Insights logs captured](https://learn.microsoft.com/azure/azure-monitor/vm/vminsights-log-query).
 
@@ -570,7 +572,7 @@ Now that you understand the components involved and have identified the shared r
 
 The Infrastructure as a Service baseline was used as the foundation for the following additional reference implementations:
 
-- [IaaS LZ](#)
+- [Virtual machine baseline for Azure landing zones](https://github.com/mspnp/iaas-landing-zone-baseline)
 
 ## Advanced topics
 
