@@ -193,13 +193,13 @@ Microsoft recommends VMs be deployed into a carefully planned network; sized app
 
 This is the heart of the guidance in this reference implementation. Here you will deploy the Azure resources for your netorking, compute and the adjacent services such as Azure Application Gateway WAF, Azure Monitor, and Azure Key Vault. This is also where you will validate the VMs are bootstrapped.
 
-1. Generate new VM authentication ssh keys by following the instructions from [Create and manage SSH keys for authentication to a Linux VM in Azure](https://learn.microsoft.com/azure/virtual-machines/linux/create-ssh-keys-detailed). Alternatively, quickly execute the following command:
+1. Generate new VM authentication SSH keys by following the instructions from [Create and manage SSH keys for authentication to a Linux VM in Azure](https://learn.microsoft.com/azure/virtual-machines/linux/create-ssh-keys-detailed). Alternatively, quickly execute the following command:
 
    ```bash
    ssh-keygen -m PEM -t rsa -b 4096 -C "opsuser01@iaas" -f ~/.ssh/opsuser01.pem -q -N ""
    ```
 
-   > Note: you will be able to use the Azure AAD integration to authenticate as well as local users with ssh keys and/or passwords based on your preference as everything is enabled as part of this deployment. But the steps will guide you over the ssh authN process using local users(ops and/or admin) as this offers you a consistent story between Azure Linux and Windows using SSH auth type since at the time of writing this the SSH AAD integration is not supported in Azure Windows VMs.
+   > Note: you will be able to use the Entra ID integration to authenticate as well as local users with SSH keys and/or passwords based on your preference as everything is enabled as part of this deployment. But the steps will guide you over the SSH authN process using local users(ops and/or admin) as this offers you a consistent story between Azure Linux and Windows using SSH auth type since at the time of writing this the SSH Entra ID integration is not supported in Azure Windows VMs.
 
 1. Ensure you have **read-only** access to the private key.
 
@@ -207,26 +207,26 @@ This is the heart of the guidance in this reference implementation. Here you wil
    chmod 400 ~/.ssh/opsuser01.pem
    ```
 
-1. Get the public ssh cert
+1. Get the public SSH cert
 
    ```bash
    SSH_PUBLIC=$(cat ~/.ssh/opsuser01.pem.pub)
    ```
 
-1. Modify the `frontendCloudInit.yml` to change the public key
+1. Set the public SSH key for the opsuser in `frontendCloudInit.yml`
 
    ```bash
    sed -i "s:YOUR_SSH-RSA_HERE:${SSH_PUBLIC}:" ./frontendCloudInit.yml
    ```
 
-1. Convert your front end cloud-init (users) file to Base64.
+1. Convert your frontend cloud-init (users) file to Base64.
 
    ```bash
    FRONTEND_CLOUDINIT_BASE64=$(base64 frontendCloudInit.yml | tr -d '\n')
    ```
 
 1. Deploy the compute infrastructure stamp ARM template.
-  :exclamation: By default, this deployment will allow you establish ssh and rdp connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
+  :exclamation: By default, this deployment will allow you establish SSH and RDP connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
    # [This takes about 30 minutes.]
@@ -363,7 +363,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    echo AB_NAME: $AB_NAME
    ```
 
-1. Remote ssh using Bastion into a frontend VM
+1. Remote SSH using Bastion into a frontend VM
 
    ```bash
    az network bastion ssh -n $AB_NAME -g rg-iaas --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
@@ -375,7 +375,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    curl https://frontend.iaas-ingress.contoso.com/ --resolve frontend.iaas-ingress.contoso.com:443:127.0.0.1 -k
    ```
 
-1. Exit the ssh session from the frontend VM
+1. Exit the SSH session from the frontend VM
 
    ```bash
    exit
@@ -388,7 +388,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    echo BACKEND_ADMINUSERNAME: $BACKEND_ADMINUSERNAME
    ```
 
-1. Remote ssh using Bastion into a backend VM
+1. Remote SSH using Bastion into a backend VM
 
    ```bash
    az network bastion ssh -n $AB_NAME -g rg-iaas --username $BACKEND_ADMINUSERNAME --auth-typ password --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
@@ -400,7 +400,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    curl http://127.0.0.1
    ```
 
-1. Exit the ssh session from the backend VM
+1. Exit the SSH session from the backend VM
 
    ```bash
    exit
@@ -558,7 +558,7 @@ Most of the Azure resources deployed in the prior steps will incur ongoing charg
    az keyvault purge -n $KEYVAULT_NAME_IAAS_BASELINE
    ```
 
-1. If any temporary changes were made to Azure AD or Azure RBAC permissions consider removing those as well.
+1. If any temporary changes were made to Entra ID or Azure RBAC permissions consider removing those as well.
 
 ### Automation
 
