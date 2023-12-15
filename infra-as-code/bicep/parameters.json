@@ -19,9 +19,6 @@
     },
     "frontendCloudInitAsBase64": {
       "value": "[base64 could init data]"
-    },
-    "backendCloudInitAsBase64": {
-      "value": "[base64 could init data]"
     }
   }
 }

@@ -1,4 +1,8 @@
 #cloud-config
+# Use cloud init to bootstrap your virtual machines by installing packages,
+# configuring partitions and filesystems, or setting up a configuration
+# management solution such as ansible, chef, or puppet.
+# https://cloudinit.readthedocs.io/en/latest/reference/modules.html
 users:
   - name: opsuser01
     sudo: False
