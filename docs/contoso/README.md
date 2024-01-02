@@ -6,7 +6,7 @@ External clients access the web app hosted on frontend servers, which in turn re
 
 
 - Have two workloads running and operating on premises.
-- Use Azure Active Directory for identity management.
+- Use Microsoft Entra ID for identity management.
 - They are investing in getting knowledgeable about containers but as a first step they plan to land in the cloud using Infrastructure as a Service resources.
 - Aware of Virtual Machine Scale Sets and their new capabilities for orchestration.
 
@@ -34,7 +34,7 @@ Review Azure services and workloads from the lens of security. Incorporate Azure
 
 ### Identity team
 
-Responsible for identity and access management for the Azure environment. They work with the Security and Architecture teams for use of Azure Active Directory, role-based access controls, and segmentation. Also, monitoring service principles for service access and application level access.
+Responsible for identity and access management for the Azure environment. They work with the Security and Architecture teams for use of Microsoft Entra ID, role-based access controls, and segmentation. Also, monitoring service principles for service access and application level access.
 
 ### Networking team
 
@@ -66,7 +66,7 @@ The web service’s host should have these capabilities.
 
 ### Security
 
-- Identity management: Contoso is an existing Microsoft 365 user. They rely heavily on Azure Active Directory as their control plane for identity.
+- Identity management: Contoso is an existing Microsoft 365 user. They rely heavily on Microsoft Entra ID as their control plane for identity.
 - Certificate: They must expose all web services through SSL and aim for end-to-end encryption, as much as possible.
 - Network: They have existing workloads running in Azure Virtual Networks. They would like to minimize direct exposure to Azure resources to the public internet. Their existing architecture runs with regional hub and spoke topologies. This way, the network can be expanded in the future and also provide workload isolation. All web applications require a web application firewall (WAF) service to help govern HTTP traffic flows.
 - Secrets management: They would like to use a secure store for sensitive information.

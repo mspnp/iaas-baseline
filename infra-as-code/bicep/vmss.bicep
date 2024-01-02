@@ -60,16 +60,16 @@ param vmssFrontendApplicationSecurityGroupName string
 @description('The name of the backend Application Security Group.')
 param vmssBackendApplicationSecurityGroupName string
 
-@description('The Azure Active Directory group/user object id (guid) that will be assigned as the admin users for all deployed virtual machines.')
+@description('The Microsoft Entra group/user object id (guid) that will be assigned as the admin users for all deployed virtual machines.')
 @minLength(36)
-param adminAadSecurityPrincipalObjectId string
+param adminSecurityPrincipalObjectId string
 
-@description('The principal type of the adminAadSecurityPrincipalObjectId ID.')
+@description('The principal type of the adminSecurityPrincipalObjectId ID.')
 @allowed([
   'User'
   'Group'
 ])
-param adminAddSecurityPrincipalType string
+param adminSecurityPrincipalType string
 
 @description('The name of the Azure KeyVault Private DNS Zone.')
 param keyVaultDnsZoneName string
@@ -219,15 +219,15 @@ module vmssBackendKeyVaultReaderRoleAssignmentModule './modules/keyvaultRoleAssi
   }
 }
 
-@description('Sets up the provided object id that belongs to a group or user to have access to authenticate into virtual machines with the AAD login extension installed in this resource group.')
+@description('Sets up the provided object id that belongs to a group or user to have access to authenticate into virtual machines with the Microsoft Entra ID login (AADLogin/AADSSHLogin) extension installed in this resource group.')
 resource groupOrUserAdminLoginRoleRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: resourceGroup()
-  name: guid(resourceGroup().id, adminAadSecurityPrincipalObjectId, virtualMachineAdminLoginRole.id)
+  name: guid(resourceGroup().id, adminSecurityPrincipalObjectId, virtualMachineAdminLoginRole.id)
   properties: {
-    principalId: adminAadSecurityPrincipalObjectId
+    principalId: adminSecurityPrincipalObjectId
     roleDefinitionId: virtualMachineAdminLoginRole.id
-    principalType: adminAddSecurityPrincipalType
-    description: 'Allows users in this group or a single user access to log into virtual machines that use the AAD login extension.'
+    principalType: adminSecurityPrincipalType
+    description: 'Allows users in this group or a single user access to log into virtual machines through Microsoft Entra ID.'
   }
 }
 
