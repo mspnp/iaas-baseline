@@ -252,12 +252,12 @@ This is the heart of the guidance in this reference implementation. Here you wil
    ```output
    1-Zone    2-Name                     3-VMSize         4-OSType    5-OSDiskSizeGB    6-DataDiskType    7-DataDiskSizeGB    8-PowerState
    --------  -------------------------  ---------------  ----------  ----------------  ----------------  ------------------  ------------------
-   1         vmss-frontend-00_e49497b3  Standard_D4s_v3  Linux       30                                                      PowerState/running
-   1         vmss-backend-00_c454e7bb   Standard_E2s_v3  Windows     30                Premium_LRS       4                   PowerState/running
-   2         vmss-frontend-00_187eb769  Standard_D4s_v3  Linux       30                                                      PowerState/running
-   2         vmss-backend-00_e4057ba4   Standard_E2s_v3  Windows     30                Premium_LRS       4                   PowerState/running
-   3         vmss-frontend-00_9d738714  Standard_D4s_v3  Linux       30                                                      PowerState/running
-   3         vmss-backend-00_6e781ed7   Standard_E2s_v3  Windows     30                Premium_LRS       4                   PowerState/running
+   1         vmss-frontend-00_e49497b3  Standard_D4s_v3  Linux       30                Premium_ZRS       4                   PowerState/running
+   1         vmss-backend-00_c454e7bb   Standard_E2s_v3  Windows     30                Premium_ZRS       4                   PowerState/running
+   2         vmss-frontend-00_187eb769  Standard_D4s_v3  Linux       30                Premium_ZRS       4                   PowerState/running
+   2         vmss-backend-00_e4057ba4   Standard_E2s_v3  Windows     30                Premium_ZRS       4                   PowerState/running
+   3         vmss-frontend-00_9d738714  Standard_D4s_v3  Linux       30                Premium_ZRS       4                   PowerState/running
+   3         vmss-backend-00_6e781ed7   Standard_E2s_v3  Windows     30                Premium_ZRS       4                   PowerState/running
    ```
 
    :bulb: From the `Zone` column you can easily understand how you VMs were spread at provisioning time in the Azure Availablity Zones. Additionally, you will notice that only backend machines are attached with managed data disks. This list also gives you the current power state of every machine in your VMSS instances.
@@ -538,7 +538,7 @@ Most of the Azure resources deployed in the prior steps will incur ongoing charg
 1. Obtain the Azure KeyVault resource name
 
    ```bash
-   export KEYVAULT_NAME_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n mmain --query properties.outputs.keyVaultName.value -o tsv)
+   export KEYVAULT_NAME_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n main --query properties.outputs.keyVaultName.value -o tsv)
    echo KEYVAULT_NAME_IAAS_BASELINE: $KEYVAULT_NAME_IAAS_BASELINE
    ```
 
