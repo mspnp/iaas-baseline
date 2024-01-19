@@ -312,12 +312,16 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
       }
       storageProfile: {
         osDisk: {
+          osType: 'Linux'
           diffDiskSettings: {
             option: 'Local'
             placement: 'CacheDisk'
           }
           caching: 'ReadOnly'
           createOption: 'FromImage'
+          managedDisk: {
+            storageAccountType: 'Standard_LRS' // Ephemeral OS disk is supported for VMs or VM Scale Set Instances using Standard LRS storage account type only
+          }
         }
         imageReference: {
           publisher: 'Canonical'
@@ -333,7 +337,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
             diskSizeGB: 4
             lun: 0
             managedDisk: {
-              storageAccountType: 'Premium_LRS'
+              storageAccountType: 'Premium_ZRS'
             }
           }
         ]
@@ -574,7 +578,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
           caching: 'ReadOnly'
           createOption: 'FromImage'
           managedDisk: {
-            storageAccountType: 'Standard_LRS'
+            storageAccountType: 'Standard_LRS' // Ephemeral OS disk is supported for VMs or VM Scale Set Instances using Standard LRS storage account type only
           }
           deleteOption: 'Delete'
           diskSizeGB: 30
