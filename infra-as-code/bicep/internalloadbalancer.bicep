@@ -19,6 +19,9 @@ param internalLoadBalancerSubnetName string
 @description('This is the base name for each Azure resource name.')
 param baseName string
 
+@description('The Azure Log Analytics Workspace name.')
+param logAnalyticsWorkspaceName string
+
 /*** VARIABLES ***/
 
 var ilbName = 'ilb-${baseName}'
@@ -27,6 +30,11 @@ var ilbName = 'ilb-${baseName}'
 
 
 /*** EXISTING RESOURCES ***/
+
+// Log Analytics Workspace
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+  name: logAnalyticsWorkspaceName
+}
 
 // The target virtual network
 resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
@@ -99,6 +107,27 @@ resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
     ]
   }
   dependsOn: []
+}
+
+// Internal Load Balancer diagnostics
+resource internalLoadBalancerDiagSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'default'
+  scope: internalLoadBalancer
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
 }
 
 /*** OUTPUTS ***/

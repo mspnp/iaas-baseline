@@ -117,6 +117,7 @@ module gatewayModule 'gateway.bicep' = {
     gatewayTrustedRootSSLCertSecretUri: secretsModule.outputs.gatewayTrustedRootSSLCertSecretUri
     gatewayHostName: domainName
     ingressDomainName: ingressDomainName
+    logAnalyticsWorkspaceName: monitoringModule.outputs.logAnalyticsWorkspaceName
   }
   dependsOn: []
 }
@@ -158,6 +159,7 @@ module internalLoadBalancerModule 'internalloadbalancer.bicep' = {
     internalLoadBalancerSubnetName: networkingModule.outputs.internalLoadBalancerSubnetName
     numberOfAvailabilityZones: numberOfAvailabilityZones
     baseName: vmssName
+    logAnalyticsWorkspaceName: monitoringModule.outputs.logAnalyticsWorkspaceName
   }
   dependsOn: []
 }
