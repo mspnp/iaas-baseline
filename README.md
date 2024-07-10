@@ -177,15 +177,16 @@ The following two resource groups will be created and populated with networking 
 
 | Name                            | Purpose                                   |
 |---------------------------------|-------------------------------------------|
-| rg-iaas | Contains all of your organization's regional spokes and related networking resources. |
+| rg-iaas-{LOCATION_IAAS_BASELINE} | Contains all of your organization's regional spokes and related networking resources. |
 
 1. Create the networking spokes resource group.
 
    > :book: The networking team also keeps all of their spokes in a centrally-managed resource group. The location of this group does not matter and will not factor into where our network will live. (This resource group would have already existed or would have been part of an Azure landing zone that contains the compute resources.)
 
    ```bash
+   export LOCATION_IAAS_BASELINE=centralus
    # [This takes less than one minute to run.]
-   az group create -n rg-iaas -l centralus
+   az group create -n rg-iaas-${LOCATION_IAAS_BASELINE} -l ${LOCATION_IAAS_BASELINE}
    ```
 
 ### 3. Build the target network and deploy VMs
@@ -226,12 +227,12 @@ This is the heart of the guidance in this reference implementation. Here you wil
    FRONTEND_CLOUDINIT_BASE64=$(base64 frontendCloudInit.yml | tr -d '\n')
    ```
 
-1. Deploy the compute infrastructure stamp ARM template.
+1. Deploy the compute infrastructure stamp Bicep template.  
   :exclamation: By default, this deployment will allow you establish SSH and RDP connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
    # [This takes about 30 minutes.]
-   az deployment group create -g rg-iaas -f infra-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE} adminSecurityPrincipalObjectId="$(az ad signed-in-user show --query "id" -o tsv)"
+   az deployment group create -g rg-iaas-${LOCATION_IAAS_BASELINE} -f infra-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE} adminSecurityPrincipalObjectId="$(az ad signed-in-user show --query "id" -o tsv)"
    ```
 
    The deployment creation will emit the following:
@@ -243,10 +244,10 @@ This is the heart of the guidance in this reference implementation. Here you wil
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./infra-as-a-code/bicep/parameters.json) file and deployed as above, using `-p "@./infra-as-a-code/bicep/parameters.json"` instead of providing the individual key-value pairs.
 
-1. Check all your recently created VMs at the rg-iaas resources group are in `running` power state
+1. Check all your recently created VMs at the rg-iaas-${LOCATION_IAAS_BASELINE} resources group are in `running` power state
 
    ```bash
-   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" -o table
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" -o table
    ````
 
    ```output
@@ -265,7 +266,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Validate all your VMs have been able to sucessfully install all the desired VM extensions
 
    ```bash
-    az graph query -q "Resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( Resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query '[].[VMName, ComputerName, Extensions[]]' -o table
+    az graph query -q "Resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( Resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query '[].[VMName, ComputerName, Extensions[]]' -o table
    ```
 
    ```output
@@ -284,7 +285,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query Heath Extension substatus for your Frontend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view -g rg-iaas --ids $(az vm list -g rg-iaas --query "[[?contains(name,'vmss-frontend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
+   az vm get-instance-view -g rg-iaas-${LOCATION_IAAS_BASELINE} --ids $(az vm list -g rg-iaas-${LOCATION_IAAS_BASELINE} --query "[[?contains(name,'vmss-frontend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='HealthExtension'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
@@ -308,7 +309,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query Application Heath Windows Extension substatus for your Backend VMs and see whether your application is healthy
 
    ```bash
-   az vm get-instance-view -g rg-iaas --ids $(az vm list -g rg-iaas --query "[[?contains(name,'vmss-backend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
+   az vm get-instance-view -g rg-iaas-${LOCATION_IAAS_BASELINE} --ids $(az vm list -g rg-iaas-${LOCATION_IAAS_BASELINE} --query "[[?contains(name,'vmss-backend')].id]" -o tsv) --query "[*].[name, instanceView.extensions[?name=='ApplicationHealthWindows'].substatuses[].message]"
    ```
 
    :bulb: this reports you back on application health from inside the virtual machine instance probing on a local application endpoint that happens to be `./favicon.ico` over HTTPS. This health status is used by Azure to initiate repairs on unhealthy instances and to determine if an instance is eligible for upgrade operations. Additionally, this extension can be used in situations where an external probe such as the Azure Load Balancer health probes can't be used.
@@ -332,7 +333,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query the virtual machine scale set frontend and backend auto repair policy configuration
 
    ```bash
-   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachineScaleSets' and resourceGroup contains 'rg-iaas' | project ['1-Name'] = name, ['2-AutoRepairEnabled'] = properties.automaticRepairsPolicy.enabled, ['3-AutoRepairEnabledGracePeriod'] = properties.automaticRepairsPolicy.gracePeriod" -o table
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachineScaleSets' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | project ['1-Name'] = name, ['2-AutoRepairEnabled'] = properties.automaticRepairsPolicy.enabled, ['3-AutoRepairEnabledGracePeriod'] = properties.automaticRepairsPolicy.gracePeriod" -o table
    ```
 
    :bulb: If the auto repair is enabled and an instance is found to be unhealthy, then the scale set performs repair action by deleting the unhealthy instance and creating a new one to replace it. At any given time, no more than 5% of the instances in the scale set are repaired through the automatic repairs policy. Grace period is the amount of time to allow the instance to return to healthy state.
@@ -347,27 +348,27 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query the resources that are Non Compliance based on the Policies assigned to them
 
    ```bash
-   az graph query -q "PolicyResources | where type == 'microsoft.policyinsights/policystates' and properties.policyAssignmentScope contains 'rg-iaas' | where properties.complianceState == 'NonCompliant' | project ['1-PolicyAssignmentName'] = properties.policyAssignmentName, ['2-NonCompliantResourceId'] = properties.resourceId" -o table
+   az graph query -q "PolicyResources | where type == 'microsoft.policyinsights/policystates' and properties.policyAssignmentScope contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | where properties.complianceState == 'NonCompliant' | project ['1-PolicyAssignmentName'] = properties.policyAssignmentName, ['2-NonCompliantResourceId'] = properties.resourceId" -o table
    ```
 
    ```output
    1-PolicyAssignmentName                2-NonCompliantResourceId
    ------------------------------------  --------------------------------------------------------------------------------------------------------------------------------------------
-   9c2bf0f9-855d-596c-a2b0-0439c3b5a6c3  /subscriptions/d0d422cd-e446-42aa-a2e2-e88806508d3b/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachinescalesets/vmss-backend
-   bba5016f-b2e2-587d-8d8c-e25c5853b5fc  /subscriptions/d0d422cd-e446-42aa-a2e2-e88806508d3b/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachinescalesets/vmss-frontend
+   9c2bf0f9-855d-596c-a2b0-0439c3b5a6c3  /subscriptions/d0d422cd-e446-42aa-a2e2-e88806508d3b/resourcegroups/rg-iaas-${LOCATION_IAAS_BASELINE}/providers/microsoft.compute/virtualmachinescalesets/vmss-backend
+   bba5016f-b2e2-587d-8d8c-e25c5853b5fc  /subscriptions/d0d422cd-e446-42aa-a2e2-e88806508d3b/resourcegroups/rg-iaas-${LOCATION_IAAS_BASELINE}/providers/microsoft.compute/virtualmachinescalesets/vmss-frontend
    ```
 
 1. Get the Azure Bastion name.
 
    ```bash
-   AB_NAME=$(az deployment group show -g rg-iaas -n main --query properties.outputs.bastionHostName.value -o tsv)
+   AB_NAME=$(az deployment group show -g rg-iaas-${LOCATION_IAAS_BASELINE} -n main --query properties.outputs.bastionHostName.value -o tsv)
    echo AB_NAME: $AB_NAME
    ```
 
 1. Remote SSH using Bastion into a frontend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME -g rg-iaas --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas-${LOCATION_IAAS_BASELINE} --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
    ```
 
 1. Validate your workload (a Nginx instance) is running in the frontend
@@ -385,14 +386,14 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Get the backend admin user name.
 
    ```bash
-   BACKEND_ADMINUSERNAME=$(az deployment group show -g rg-iaas -n main --query properties.outputs.backendAdminUserName.value -o tsv)
+   BACKEND_ADMINUSERNAME=$(az deployment group show -g rg-iaas-${LOCATION_IAAS_BASELINE} -n main --query properties.outputs.backendAdminUserName.value -o tsv)
    echo BACKEND_ADMINUSERNAME: $BACKEND_ADMINUSERNAME
    ```
 
 1. Remote SSH using Bastion into a backend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME -g rg-iaas --username $BACKEND_ADMINUSERNAME --auth-typ password --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas-${LOCATION_IAAS_BASELINE} --username $BACKEND_ADMINUSERNAME --auth-typ password --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
    ```
 
 1. Validate your backend workload (another Nginx instance) is running in the backend
@@ -423,7 +424,7 @@ This section will help you to validate the workload is exposed correctly and res
 
    ```bash
    # query the Azure Application Gateway Public Ip
-   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas -n main --query properties.outputs.appGwPublicIpAddress.value -o tsv)
+   APPGW_PUBLIC_IP=$(az deployment group show -g rg-iaas-${LOCATION_IAAS_BASELINE} -n main --query properties.outputs.appGwPublicIpAddress.value -o tsv)
    echo APPGW_PUBLIC_IP: $APPGW_PUBLIC_IP
    ```
 
@@ -459,7 +460,7 @@ Your workload is placed behind a Web Application Firewall (WAF), which has rules
 1. Observe that your request was blocked by Application Gateway's WAF rules and your workload never saw this potentially dangerous request.
 1. Blocked requests (along with other gateway data) will be visible in the attached Log Analytics workspace.
 
-   Browse to the Application Gateway in the resource group `rg-iaas` and navigate to the _Logs_ blade. Execute the following query below to show WAF logs and see that the request was rejected due to a _SQL Injection Attack_ (field _Message_).
+   Browse to the Application Gateway in the resource group `rg-iaas-${LOCATION_IAAS_BASELINE}` and navigate to the _Logs_ blade. Execute the following query below to show WAF logs and see that the request was rejected due to a _SQL Injection Attack_ (field _Message_).
 
    > :warning: Note that it may take a couple of minutes until the logs are transferred from the Application Gateway to the Log Analytics Workspace. So be a little patient if the query does not immediatly return results after sending the https request in the former step.
 
@@ -473,7 +474,7 @@ Your workload is placed behind a Web Application Firewall (WAF), which has rules
 1. Monitoring your compute infrastructure is critical, especially when you're running in production. Therefore, your VMs are configured with [boot diagnostics](https://learn.microsoft.com/troubleshoot/azure/virtual-machines/boot-diagnostics) and to send [diagnostic information](https://learn.microsoft.com/azure/azure-monitor/essentials/diagnostic-settings?tabs=portal) to the Log Analytics Workspace deployed as part of the [bootstrapping step](./05-bootstrap-prep.md).
 
    ```bash
-   az vm boot-diagnostics get-boot-log --ids $(az vm list -g rg-iaas --query "[].id" -o tsv)
+   az vm boot-diagnostics get-boot-log --ids $(az vm list -g rg-iaas-${LOCATION_IAAS_BASELINE} --query "[].id" -o tsv)
    ```
 
 1. In the Azure Portal, navigate to your VM resources.
@@ -489,14 +490,14 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
 1. Get the Log Analytics Workspace Id.
 
    ```bash
-   LA_WORKSPACEID=$(az deployment group show -g rg-iaas -n main --query properties.outputs.logAnalyticsWorkspaceId.value -o tsv)
+   LA_WORKSPACEID=$(az deployment group show -g rg-iaas-${LOCATION_IAAS_BASELINE} -n main --query properties.outputs.logAnalyticsWorkspaceId.value -o tsv)
    echo LA_WORKSPACEID: $LA_WORKSPACEID
    ```
 
 1. Check your Azure Monitor Agents within the last three minutes sent heartbeats to Log Analytics
 
    ```bash
-   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "Heartbeat | where TimeGenerated > ago(3m) | where ResourceGroup has 'rg-iaas' | project  Computer, TimeGenerated, Category, Version | order by TimeGenerated desc" -o table
+   az monitor log-analytics query -w $LA_WORKSPACEID --analytics-query "Heartbeat | where TimeGenerated > ago(3m) | where ResourceGroup has 'rg-iaas-${LOCATION_IAAS_BASELINE}' | project  Computer, TimeGenerated, Category, Version | order by TimeGenerated desc" -o table
    ```
 
    ```output
@@ -523,9 +524,9 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
    ```output
    RawData                                                                    TableName      TimeGenerated                 _ResourceId
    ------------------------------------------------------------------------   -------------  ----------------------------  --------------------------------------------------------------------------------------------------------------------------------------------
-   10.240.0.4 - - [15/Aug/2023:14:54:38 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:58:00.3130909Z  /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_57752db5
-   10.240.0.6 - - [15/Aug/2023:14:54:40 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:58:00.3130909Z  /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_57752db5
-   10.240.0.5 - - [15/Aug/2023:14:54:38 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:57:46.269107Z   /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas/providers/microsoft.compute/virtualmachines/vmss-backend_9949700b
+   10.240.0.4 - - [15/Aug/2023:14:54:38 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:58:00.3130909Z  /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas-${LOCATION_IAAS_BASELINE}/providers/microsoft.compute/virtualmachines/vmss-backend_57752db5
+   10.240.0.6 - - [15/Aug/2023:14:54:40 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:58:00.3130909Z  /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas-${LOCATION_IAAS_BASELINE}/providers/microsoft.compute/virtualmachines/vmss-backend_57752db5
+   10.240.0.5 - - [15/Aug/2023:14:54:38 +0000] "GET / HTTP/1.0" 200 7741...   PrimaryResult  2023-08-15T14:57:46.269107Z   /subscriptions/<YOUR_SUSBSCRIPTION_ID>/resourcegroups/rg-iaas-${LOCATION_IAAS_BASELINE}/providers/microsoft.compute/virtualmachines/vmss-backend_9949700b
    ...
    ```
 
@@ -538,7 +539,7 @@ Most of the Azure resources deployed in the prior steps will incur ongoing charg
 1. Obtain the Azure KeyVault resource name
 
    ```bash
-   export KEYVAULT_NAME_IAAS_BASELINE=$(az deployment group show -g rg-iaas -n main --query properties.outputs.keyVaultName.value -o tsv)
+   export KEYVAULT_NAME_IAAS_BASELINE=$(az deployment group show -g rg-iaas-${LOCATION_IAAS_BASELINE} -n main --query properties.outputs.keyVaultName.value -o tsv)
    echo KEYVAULT_NAME_IAAS_BASELINE: $KEYVAULT_NAME_IAAS_BASELINE
    ```
 
@@ -549,7 +550,7 @@ Most of the Azure resources deployed in the prior steps will incur ongoing charg
    :warning: Ensure you are using the correct subscription, and validate that the only resources that exist in these groups are ones you're okay deleting.
 
    ```bash
-   az group delete -n rg-iaas
+   az group delete -n rg-iaas-${LOCATION_IAAS_BASELINE}
    ```
 
 1. Purge Azure Key Vault
