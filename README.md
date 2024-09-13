@@ -184,7 +184,7 @@ The following two resource groups will be created and populated with networking 
    > :book: The networking team also keeps all of their spokes in a centrally-managed resource group. The location of this group does not matter and will not factor into where our network will live. (This resource group would have already existed or would have been part of an Azure landing zone that contains the compute resources.)
 
    ```bash
-   export LOCATION_IAAS_BASELINE=centralus
+   LOCATION_IAAS_BASELINE=centralus
    # [This takes less than one minute to run.]
    az group create -n rg-iaas-${LOCATION_IAAS_BASELINE} -l ${LOCATION_IAAS_BASELINE}
    ```
@@ -227,7 +227,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
    FRONTEND_CLOUDINIT_BASE64=$(base64 frontendCloudInit.yml | tr -d '\n')
    ```
 
-1. Deploy the compute infrastructure stamp Bicep template.  
+1. Deploy the compute infrastructure stamp Bicep template.
   :exclamation: By default, this deployment will allow you establish SSH and RDP connections usgin Bastion to your machines. In the case of the backend machines you are granted with admin access.
 
    ```bash
