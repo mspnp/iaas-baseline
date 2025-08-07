@@ -12,7 +12,7 @@ External clients access the web app hosted on frontend servers, which in turn re
 
 Overall, Contoso's migration to Azure is improving their resiliency, flexibility, and scalability. The Azure's infrastructure as a service offering has allowed Contoso to focus on their core business and provide better services to their clients. With the ongoing growth of their business, Contoso is confident that their cloud-based infrastructure will be able to meet their evolving needs and provide a reliable and efficient platform for their weather forecasting app.
 
-Based on the company's profile and business requirements, we've created a [reference architecture](https://aka.ms/architecture/iaas-baseline) that serves as an Infrastructure as a Service baseline. The architecture is accompanied with the implementation found in this repo. We recommend that you start with this implementation and add components based on your needs.
+Based on the company's profile and business requirements, we've created a [reference architecture](https://learn.microsoft.com/azure/architecture/virtual-machines/baseline) that serves as an Infrastructure as a Service baseline. The architecture is accompanied with the implementation found in this repo. We recommend that you start with this implementation and add components based on your needs.
 
 ## Organization structure
 
@@ -95,6 +95,7 @@ can easily be recreated consistently and at any time.
 - Azure Control Plane requests are sent with `az-cli` using bicep templates.
 - Azure Monitor VM Insights will be used for logging, metrics, monitoring, and alerting to use the existing knowledge of Log Analytics.
 - Azure Key Vault will be used to store all secret information including SSL certificates. Key Vault data will be integrated with VM extensions.
-- Three Virtual Machines using different skus for demostration purposes are added to the VMSS Flex to serve api traffic.
+- Three Virtual Machines using different skus for demonstration purposes are added to the VMSS Flex to serve api traffic.
 - All compute resources are distributed evenly in all Azure Availability Zones (1, 2 and 3) and Fault Domains for better SLA.
+
 

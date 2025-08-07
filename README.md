@@ -6,7 +6,7 @@ We walk through the deployment here in a rather _verbose_ method to help you und
 
 ## Azure Architecture Center guidance
 
-This project has a companion set of articles that describe challenges, design patterns, and best practices for using Virtual Machine Scale Sets. You can find this article on the Azure Architecture Center at [Azure Infrastructure as a Service baseline](https://aka.ms/architecture/iaas-baseline). If you haven't reviewed it, we suggest you read it to learn about the considerations applied in the implementation. Ultimately, this is the direct implementation of that specific architectural guidance.
+This project has a companion set of articles that describe challenges, design patterns, and best practices for using Virtual Machine Scale Sets. You can find this article on the Azure Architecture Center at [Azure Infrastructure as a Service baseline](https://learn.microsoft.com/azure/architecture/virtual-machines/baseline). If you haven't reviewed it, we suggest you read it to learn about the considerations applied in the implementation. Ultimately, this is the direct implementation of that specific architectural guidance.
 
 ## Architecture
 
