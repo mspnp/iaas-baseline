@@ -95,7 +95,7 @@ can easily be recreated consistently and at any time.
 - Azure Control Plane requests are sent with `az-cli` using bicep templates.
 - Azure Monitor VM Insights will be used for logging, metrics, monitoring, and alerting to use the existing knowledge of Log Analytics.
 - Azure Key Vault will be used to store all secret information including SSL certificates. Key Vault data will be integrated with VM extensions.
-- Three Virtual Machines using different skus for demostration purposes are added to the VMSS Flex to serve api traffic.
+- Three Virtual Machines using different skus for demonstration purposes are added to the VMSS Flex to serve api traffic.
 - All compute resources are distributed evenly in all Azure Availability Zones (1, 2 and 3) and Fault Domains for better SLA.
 
 
