@@ -75,14 +75,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
 }
 
 // Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
   name: logAnalyticsWorkspaceName
 }
 
 /*** RESOURCES ***/
 
 // User Managed Identity that App Gateway is assigned. Used for Azure Key Vault Access.
-resource appGatewayManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+resource appGatewayManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2025-01-31-preview' = {
   name: 'id-appgateway'
   location: location
 }
@@ -107,7 +107,7 @@ module appGatewayReaderRoleAssignmentModule './modules/keyvaultRoleAssignment.bi
   }
 }
 
-resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies@2021-05-01' = {
+resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies@2024-07-01' = {
   name: 'waf-${baseName}'
   location: location
   properties: {
@@ -133,7 +133,7 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
   }
 }
 
-resource appGateway 'Microsoft.Network/applicationGateways@2021-05-01' = {
+resource appGateway 'Microsoft.Network/applicationGateways@2024-07-01' = {
   name: agwName
   location: location
   identity: {
@@ -283,6 +283,7 @@ resource appGateway 'Microsoft.Network/applicationGateways@2021-05-01' = {
           backendHttpSettings: {
             id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'vmss-webserver-backendpool-httpsettings')
           }
+          priority: 100 
         }
       }
     ]

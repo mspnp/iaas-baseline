@@ -41,7 +41,7 @@ resource configureWindowsMachinesWithDataCollectionRulePolicy 'Microsoft.Authori
 /*** RESOURCES ***/
 
 // This Log Analytics workspace stores logs from the regional spokes network, and bastion.
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   name: 'log-${location}'
   location: location
   properties: {
@@ -137,7 +137,7 @@ resource windowsVmLogsDataCollectionEndpoints 'Microsoft.Insights/dataCollection
   }
 }
 
-resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2021-09-01-preview' = {
+resource windowsVmLogsCustomDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
   name: 'dcrWindowsLogs'
   location: location
   kind: 'Windows'
@@ -268,7 +268,7 @@ resource changeTrackingTablesSolutions 'Microsoft.OperationsManagement/solutions
 }
 
 @description('Data collection rule for Windows virtual machines.')
-resource windowsVmDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
+resource windowsVmDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
   name: 'dcrWindowsEventsAndMetrics'
   location: location
   kind: 'Windows'
@@ -549,6 +549,7 @@ resource windowsVmDataCollectionRule 'Microsoft.Insights/dataCollectionRules@202
   }
   dependsOn: [
     changeTrackingTablesSolutions
+    logAnalyticsWorkspace::windowsLogsCustomTable
   ]
 }
 
@@ -604,7 +605,7 @@ resource dineWindowsDcrPolicyMonitoringContributorRoleAssignment 'Microsoft.Auth
 }
 
 @description('Data collection rule for Linux virtual machines.')
-resource linuxVmDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
+resource linuxVmDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
   name: 'dcrLinuxSyslogAndMetrics'
   location: location
   kind: 'Linux'

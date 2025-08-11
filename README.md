@@ -232,7 +232,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 
    ```bash
    # [This takes about 30 minutes.]
-   az deployment group create -g rg-iaas-${LOCATION_IAAS_BASELINE} -f infra-as-code/bicep/main.bicep -p location=eastus2 frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE} adminSecurityPrincipalObjectId="$(az ad signed-in-user show --query "id" -o tsv)"
+   az deployment group create -g rg-iaas-${LOCATION_IAAS_BASELINE} -f infra-as-code/bicep/main.bicep -p location=${LOCATION_IAAS_BASELINE} frontendCloudInitAsBase64="${FRONTEND_CLOUDINIT_BASE64}" appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_IAAS_BASELINE} vmssWildcardTlsPublicCertificate=${VMSS_WILDCARD_CERTIFICATE_BASE64_IAAS_BASELINE} vmssWildcardTlsPublicAndKeyCertificates=${VMSS_WILDCARD_CERT_PUBLIC_PRIVATE_KEYS_BASE64_IAAS_BASELINE} domainName=${DOMAIN_NAME_IAAS_BASELINE} adminSecurityPrincipalObjectId="$(az ad signed-in-user show --query "id" -o tsv)"
    ```
 
    The deployment creation will emit the following:
@@ -244,10 +244,10 @@ This is the heart of the guidance in this reference implementation. Here you wil
 
    > Alteratively, you could have updated the [`azuredeploy.parameters.prod.json`](./infra-as-a-code/bicep/parameters.json) file and deployed as above, using `-p "@./infra-as-a-code/bicep/parameters.json"` instead of providing the individual key-value pairs.
 
-1. Check all your recently created VMs at the rg-iaas-${LOCATION_IAAS_BASELINE} resources group are in `running` power state
+1. Check all your recently created VMs at the rg-iaas-${LOCATION_IAAS_BASELINE} resources group are in `running` power state. 
 
    ```bash
-   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" -o table
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" --query 'data[]' -o table
    ````
 
    ```output
@@ -261,23 +261,25 @@ This is the heart of the guidance in this reference implementation. Here you wil
    3         vmss-backend-00_6e781ed7   Standard_E2s_v3  Windows     30                Premium_ZRS       4                   PowerState/running
    ```
 
+   Alternatively, Azure Resource Graph Explorer can be used to execute Kusto Resource Graph queries.
+
    :bulb: From the `Zone` column you can easily understand how you VMs were spread at provisioning time in the Azure Availablity Zones. Additionally, you will notice that only backend machines are attached with managed data disks. This list also gives you the current power state of every machine in your VMSS instances.
 
 1. Validate all your VMs have been able to sucessfully install all the desired VM extensions
 
    ```bash
-    az graph query -q "Resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( Resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query '[].[VMName, ComputerName, Extensions[]]' -o table
-   ```
-
+    az graph query -q "resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query "data[].{ComputerName:ComputerName, VMName:VMName,Extensions:join(', ', Extensions)}" -o table
+       ```
    ```output
-   Column1                 Column2         Column3
+
+   VMName                  ComputerName    Extensions
    ----------------------  --------------  ------------------------------------------------------------------------------------------------------------------------------------
-   vmss-backend_cde8db05   backendDWC7I3   ['DependencyAgentWindows', 'AADLogin', 'KeyVaultForWindows', 'CustomScript', 'ApplicationHealthWindows', 'AzureMonitorWindowsAgent']
-   vmss-backend_c0d74d90   backendHIVL2O   ['ApplicationHealthWindows', 'KeyVaultForWindows', 'AzureMonitorWindowsAgent', 'DependencyAgentWindows', 'AADLogin', 'CustomScript']
-   vmss-backend_aabab2a4   backendNNQTZW   ['ApplicationHealthWindows', 'KeyVaultForWindows', 'AzureMonitorWindowsAgent', 'CustomScript', 'DependencyAgentWindows', 'AADLogin']
-   vmss-frontend_22b8ee46  frontend9MTYKM  ['AzureMonitorLinuxAgent', 'CustomScript', 'KeyVaultForLinux', 'AADSSHLogin', 'HealthExtension', 'DependencyAgentLinux']
-   vmss-frontend_da993e21  frontendADLBDR  ['CustomScript', 'KeyVaultForLinux', 'DependencyAgentLinux', 'AzureMonitorLinuxAgent', 'HealthExtension', 'AADSSHLogin']
-   vmss-frontend_47a941aa  frontendJVSX4A  ['AzureMonitorLinuxAgent', 'KeyVaultForLinux', 'HealthExtension', 'DependencyAgentLinux', 'AADSSHLogin', 'CustomScript']
+   vmss-backend_cde8db05   backendDWC7I3   AADLogin, ApplicationHealthWindows, DependencyAgentWindows, KeyVaultForWindows, CustomScript, AzureMonitorWindowsAgent
+   vmss-backend_c0d74d90   backendHIVL2O   AADLogin, ApplicationHealthWindows, DependencyAgentWindows, KeyVaultForWindows, CustomScript, AzureMonitorWindowsAgent
+   vmss-backend_aabab2a4   backendNNQTZW   AADLogin, ApplicationHealthWindows, DependencyAgentWindows, KeyVaultForWindows, CustomScript, AzureMonitorWindowsAgent
+   vmss-frontend_22b8ee46  frontend9MTYKM  AzureMonitorLinuxAgent, DependencyAgentLinux, HealthExtension, CustomScript, AADSSHLogin, KeyVaultForLinux
+   vmss-frontend_da993e21  frontendADLBDR  AzureMonitorLinuxAgent, DependencyAgentLinux, HealthExtension, CustomScript, AADSSHLogin, KeyVaultForLinux
+   vmss-frontend_47a941aa  frontendJVSX4A  AzureMonitorLinuxAgent, DependencyAgentLinux, HealthExtension, CustomScript, AADSSHLogin, KeyVaultForLinux
    ```
 
    :bulb: From some of the extension names in `Column3` you can easily spot that the backend VMs are `Windows` machines and the frontend VMs are `Linux` machines. For more information about the VM extensions please take a look at <https://learn.microsoft.com/azure/virtual-machines/extensions/overview>.

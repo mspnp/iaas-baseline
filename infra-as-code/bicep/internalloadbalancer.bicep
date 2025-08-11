@@ -32,7 +32,7 @@ var ilbName = 'ilb-${baseName}'
 /*** EXISTING RESOURCES ***/
 
 // Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
   name: logAnalyticsWorkspaceName
 }
 
@@ -49,7 +49,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' existing =  {
 
 /*** RESOURCES ***/
 
-resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
+resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2024-07-01' = {
   name: ilbName
   location: location
   sku: {

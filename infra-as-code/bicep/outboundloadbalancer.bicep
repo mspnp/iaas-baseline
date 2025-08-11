@@ -33,7 +33,7 @@ resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' exi
 /*** EXISTING RESOURCES ***/
 
 // Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
   scope: targetResourceGroup
   name: logAnalyticsWorkspaceName
 }
@@ -41,7 +41,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12
 /*** RESOURCES ***/
 
 var numOutboundLoadBalancerIpAddressesToAssign = 3
-resource pipsOutboundLoadbalanacer 'Microsoft.Network/publicIPAddresses@2021-05-01' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
+resource pipsOutboundLoadbalanacer 'Microsoft.Network/publicIPAddresses@2024-07-01' = [for i in range(0, numOutboundLoadBalancerIpAddressesToAssign): {
   name: 'pip-olb-${location}-${padLeft(i, 2, '0')}'
   location: location
   sku: {
@@ -75,7 +75,7 @@ resource pipsOutboundLoadbalanacer_diagnosticSetting 'Microsoft.Insights/diagnos
   }
 }]
 
-resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' = {
+resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2024-07-01' = {
   name: olbName
   location: location
   sku: {

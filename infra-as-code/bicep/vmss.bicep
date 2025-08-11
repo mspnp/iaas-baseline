@@ -120,7 +120,7 @@ resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' exi
 /*** EXISTING RESOURCES ***/
 
 // Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
   scope: targetResourceGroup
   name: logAnalyticsWorkspaceName
 }
@@ -153,28 +153,28 @@ resource vmssBackendApplicationSecurityGroup 'Microsoft.Network/applicationSecur
   name: vmssBackendApplicationSecurityGroupName
 }
 
-resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' existing = {
+resource outboundLoadBalancer 'Microsoft.Network/loadBalancers@2024-07-01' existing = {
   name: olbName
 }
 
-resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2021-05-01' existing = {
+resource internalLoadBalancer 'Microsoft.Network/loadBalancers@2024-07-01' existing = {
   name: ilbName
 }
 
-resource appGateway 'Microsoft.Network/applicationGateways@2021-05-01' existing = {
+resource appGateway 'Microsoft.Network/applicationGateways@2024-07-01' existing = {
   name: agwName
 }
 
 /*** RESOURCES ***/
 
 @description('The managed identity for frontend instances')
-resource vmssFrontendManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+resource vmssFrontendManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2025-01-31-preview' = {
   name: 'id-vm-frontend'
   location: location
 }
 
 @description('The managed identity for backend instances')
-resource vmssBackendManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+resource vmssBackendManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2025-01-31-preview' = {
   name: 'id-vm-backend'
   location: location
 }
@@ -260,7 +260,7 @@ resource contosoDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 }
 
 @description('The compute for frontend instances; these machines are assigned to the frontend app team to deploy their workloads')
-resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
+resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2024-11-01' = {
   name: 'vmss-frontend'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, numberOfAvailabilityZones)
@@ -343,7 +343,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
         ]
       }
       networkProfile: {
-        networkApiVersion: '2020-11-01'
+        networkApiVersion: '2024-07-01'
         networkInterfaceConfigurations: [
           {
             name: 'nic-frontend'
@@ -509,7 +509,7 @@ resource vmssFrontend 'Microsoft.Compute/virtualMachineScaleSets@2022-11-01' = {
 }
 
 @description('The compute for backend instances; these machines are assigned to the api app team so they can deploy their workloads.')
-resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
+resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2024-11-01' = {
   name: 'vmss-backend'
   location: location
   zones: pickZones('Microsoft.Compute', 'virtualMachineScaleSets', location, numberOfAvailabilityZones)
@@ -603,7 +603,7 @@ resource vmssBackend 'Microsoft.Compute/virtualMachineScaleSets@2023-03-01' = {
         ]
       }
       networkProfile: {
-        networkApiVersion: '2020-11-01'
+        networkApiVersion: '2024-07-01'
         networkInterfaceConfigurations: [
           {
             name: 'nic-backend'
