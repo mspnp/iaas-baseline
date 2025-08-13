@@ -32,13 +32,13 @@ var vnetName = 'vnet'
 /*** RESOURCES ***/
 
 // Log Analytics Workspace
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
   scope: resourceGroup()
   name: logAnalyticsWorkspaceName
 }
 
 // NSG around the Azure Bastion Subnet.
-resource bastionSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource bastionSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${location}-bastion'
   location: location
   properties: {
@@ -240,7 +240,7 @@ resource keyVaultApplicationSecurityGroup 'Microsoft.Network/applicationSecurity
 }
 
 // Default NSG on the vmss frontend. Feel free to constrict further.
-resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource vmssFrontendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${vnetName}-frontend'
   location: location
   properties: {
@@ -406,7 +406,7 @@ resource vmssFrontendSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.In
 }
 
 // Default NSG on the vmss backend. Feel free to constrict further.
-resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource vmssBackendSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${vnetName}-backend'
   location: location
   properties: {
@@ -572,7 +572,7 @@ resource vmssBackendSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Ins
 }
 
 // Default NSG on the Vmss Backend internal load balancer subnet. Feel free to constrict further.
-resource internalLoadBalancerSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource internalLoadBalancerSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${vnetName}-ilbs'
   location: location
   properties: {
@@ -656,7 +656,7 @@ resource internalLoadBalancerSubnetNetworkSecurityGroupDiagnosticsSettings 'Micr
 }
 
 // NSG on the Application Gateway subnet.
-resource appGwSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource appGwSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${vnetName}-appgw'
   location: location
   properties: {
@@ -750,7 +750,7 @@ resource appGwSubnetNetworkSecurityGroupDiagnosticsSettings 'Microsoft.Insights/
 }
 
 // NSG on the Private Link subnet.
-resource privateLinkEndpointsSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource privateLinkEndpointsSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${vnetName}-privatelinkendpoints'
   location: location
   properties: {
@@ -817,7 +817,7 @@ resource privateLinkEndpointsSubnetNetworkSecurityGroupDiagnosticsSettings 'Micr
 }
 
 // NSG on the Deployment Agent subnet.
-resource deploymentAgentSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource deploymentAgentSubnetNetworkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-07-01' = {
   name: 'nsg-${vnetName}-deploymentagent'
   location: location
   properties: {
@@ -868,7 +868,7 @@ resource deploymentAgentSubnetNetworkSecurityGroup 'Microsoft.Network/networkSec
 // The spoke virtual network.
 // 65,536 (-reserved) IPs available to the workload, split across subnets four subnets for Compute,
 // one for App Gateway and one for Private Link endpoints.
-resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
+resource vnet 'Microsoft.Network/virtualNetworks@2024-07-01' = {
   name: vnetName
   location: location
   properties: {
@@ -882,6 +882,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-frontend'
         properties: {
           addressPrefix: '10.240.0.0/24'
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: vmssFrontendSubnetNetworkSecurityGroup.id
           }
@@ -893,6 +894,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-backend'
         properties: {
           addressPrefix: '10.240.1.0/24'
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: vmssBackendSubnetNetworkSecurityGroup.id
           }
@@ -904,6 +906,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-ilbs'
         properties: {
           addressPrefix: '10.240.4.0/28'
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: internalLoadBalancerSubnetNetworkSecurityGroup.id
           }
@@ -915,6 +918,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-privatelinkendpoints'
         properties: {
           addressPrefix: '10.240.4.32/28'
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: privateLinkEndpointsSubnetNetworkSecurityGroup.id
           }
@@ -926,6 +930,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
         name: 'snet-deploymentagent'
         properties: {
           addressPrefix: '10.240.4.64/28'
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: deploymentAgentSubnetNetworkSecurityGroup.id
           }
@@ -997,7 +1002,7 @@ resource vnetDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-0
 }
 
 @description('The public IP for the regional hub\'s Azure Bastion service.')
-resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2024-07-01' = {
   name: 'pip-ab-${location}'
   location: location
   sku: {
@@ -1032,7 +1037,7 @@ resource bastionPublicIpDiagnosticSetting 'Microsoft.Insights/diagnosticSettings
 }
 
 @description('This regional hub\'s Azure Bastion service.')
-resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
+resource bastionHost 'Microsoft.Network/bastionHosts@2024-07-01' = {
   name: 'ab-${location}'
   location: location
   properties: {
@@ -1073,7 +1078,7 @@ resource bastionHostDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@20
 
 // Used as primary public entry point for the workload. Expected to be assigned to an Azure Application Gateway.
 // This is a public facing IP, and would be best behind a DDoS Policy (not deployed simply for cost considerations)
-resource primaryWorkloadPublicIp 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+resource primaryWorkloadPublicIp 'Microsoft.Network/publicIPAddresses@2024-07-01' = {
   name: 'pip-gw'
   location: location
   sku: {
