@@ -268,7 +268,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Validate all your VMs have been able to sucessfully install all the desired VM extensions
 
    ```bash
-    az graph query -q "resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query "data[].{ComputerName:ComputerName, VMName:VMName,Extensions:join(', ', Extensions)}" -o table
+    az graph query -q "resources | where type == 'microsoft.compute/virtualmachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend JoinID = toupper(id), ComputerName = tostring(properties.osProfile.computerName), VMName = name | join kind=leftouter( resources | where type == 'microsoft.compute/virtualmachines/extensions' | extend VMId = toupper(substring(id, 0, indexof(id, '/extensions'))), ExtensionName = name ) on \$left.JoinID == \$right.VMId | summarize Extensions = make_list(ExtensionName) by VMName, ComputerName | order by tolower(ComputerName) asc" --query "data[].{VMName:VMName, ComputerName:ComputerName, Extensions:join(', ', Extensions)}" -o table
        ```
    ```output
 
@@ -335,7 +335,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query the virtual machine scale set frontend and backend auto repair policy configuration
 
    ```bash
-   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachineScaleSets' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | project ['1-Name'] = name, ['2-AutoRepairEnabled'] = properties.automaticRepairsPolicy.enabled, ['3-AutoRepairEnabledGracePeriod'] = properties.automaticRepairsPolicy.gracePeriod" -o table
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachineScaleSets' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | project ['1-Name'] = name, ['2-AutoRepairEnabled'] = properties.automaticRepairsPolicy.enabled, ['3-AutoRepairEnabledGracePeriod'] = properties.automaticRepairsPolicy.gracePeriod" --query 'data[]' -o table
    ```
 
    :bulb: If the auto repair is enabled and an instance is found to be unhealthy, then the scale set performs repair action by deleting the unhealthy instance and creating a new one to replace it. At any given time, no more than 5% of the instances in the scale set are repaired through the automatic repairs policy. Grace period is the amount of time to allow the instance to return to healthy state.
@@ -350,7 +350,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Query the resources that are Non Compliance based on the Policies assigned to them
 
    ```bash
-   az graph query -q "PolicyResources | where type == 'microsoft.policyinsights/policystates' and properties.policyAssignmentScope contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | where properties.complianceState == 'NonCompliant' | project ['1-PolicyAssignmentName'] = properties.policyAssignmentName, ['2-NonCompliantResourceId'] = properties.resourceId" -o table
+   az graph query -q "PolicyResources | where type == 'microsoft.policyinsights/policystates' and properties.policyAssignmentScope contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | where properties.complianceState == 'NonCompliant' | project ['1-PolicyAssignmentName'] = properties.policyAssignmentName, ['2-NonCompliantResourceId'] = properties.resourceId" --query 'data[]' -o table
    ```
 
    ```output
@@ -370,7 +370,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Remote SSH using Bastion into a frontend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME -g rg-iaas-${LOCATION_IAAS_BASELINE} --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' and name contains 'vmss-frontend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas-${LOCATION_IAAS_BASELINE} --username opsuser01 --ssh-key ~/.ssh/opsuser01.pem --auth-type ssh-key --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' and name contains 'vmss-frontend'| project id" --query data[0].id -o tsv)
    ```
 
 1. Validate your workload (a Nginx instance) is running in the frontend
@@ -395,7 +395,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Remote SSH using Bastion into a backend VM
 
    ```bash
-   az network bastion ssh -n $AB_NAME -g rg-iaas-${LOCATION_IAAS_BASELINE} --username $BACKEND_ADMINUSERNAME --auth-typ password --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' and name contains 'vmss-backend'| project id" --query [0].id -o tsv)
+   az network bastion ssh -n $AB_NAME -g rg-iaas-${LOCATION_IAAS_BASELINE} --username $BACKEND_ADMINUSERNAME --auth-typ password --target-resource-id $(az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' | where resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' and name contains 'vmss-backend'| project id" --query data[0].id -o tsv)
    ```
 
 1. Validate your backend workload (another Nginx instance) is running in the backend
@@ -552,7 +552,7 @@ Most of the Azure resources deployed in the prior steps will incur ongoing charg
    :warning: Ensure you are using the correct subscription, and validate that the only resources that exist in these groups are ones you're okay deleting.
 
    ```bash
-   az group delete -n rg-iaas-${LOCATION_IAAS_BASELINE}
+   az group delete -n rg-iaas-${LOCATION_IAAS_BASELINE} -y
    ```
 
 1. Purge Azure Key Vault
