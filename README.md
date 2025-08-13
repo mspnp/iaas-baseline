@@ -247,7 +247,7 @@ This is the heart of the guidance in this reference implementation. Here you wil
 1. Check all your recently created VMs at the rg-iaas-${LOCATION_IAAS_BASELINE} resources group are in `running` power state. 
 
    ```bash
-   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project ['8-PowerState'], ['1-Zone'], ['2-Name'], ['4-OSType'], ['5-OSDiskSizeGB'], ['7-DataDiskSizeGB'], ['6-DataDiskType'], ['3-VMSize'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" --query 'data[]' -o table
+   az graph query -q "resources | where type =~ 'Microsoft.Compute/virtualMachines' and resourceGroup contains 'rg-iaas-${LOCATION_IAAS_BASELINE}' | extend ['8-PowerState'] = properties.extended.instanceView.powerState.code, ['1-Zone'] = tostring(zones[0]), ['2-Name'] = name, ['4-OSType'] = tostring(properties.storageProfile.osDisk.osType), ['5-OSDiskSizeGB'] = properties.storageProfile.osDisk.diskSizeGB, ['7-DataDiskSizeGB'] = tostring(properties.storageProfile.dataDisks[0].diskSizeGB), ['6-DataDiskType'] = tostring(properties.storageProfile.dataDisks[0].managedDisk.storageAccountType), ['3-VMSize'] = tostring(properties.hardwareProfile.vmSize) | project  ['1-Zone'], ['2-Name'], ['3-VMSize'], ['4-OSType'], ['5-OSDiskSizeGB'],  ['6-DataDiskType'],['7-DataDiskSizeGB'], ['8-PowerState'] | sort by ['1-Zone'] asc, ['4-OSType'] asc" --query 'data[]' -o table
    ````
 
    ```output
@@ -505,15 +505,15 @@ You can also execute [queries](https://learn.microsoft.com/azure/azure-monitor/l
    ```output
    Category             Computer        TableName      TimeGenerated                 Version
    -------------------  --------------  -------------  ----------------------------  ---------
-   Azure Monitor Agent  frontend33W1H1  PrimaryResult  2023-08-03T18:23:53.9882669Z  1.27.4
-   Azure Monitor Agent  frontendUZHWTP  PrimaryResult  2023-08-03T18:23:52.5931826Z  1.27.4
-   Azure Monitor Agent  frontendF6YYWG  PrimaryResult  2023-08-03T18:23:38.2812975Z  1.27.4
-   Azure Monitor Agent  backendRZRPWY   PrimaryResult  2023-08-03T18:23:29.5531509Z  1.18.0.0
-   Azure Monitor Agent  frontend33W1H1  PrimaryResult  2023-08-03T18:22:54.0179506Z  1.27.4
-   Azure Monitor Agent  frontendUZHWTP  PrimaryResult  2023-08-03T18:22:52.6105985Z  1.27.4
-   Azure Monitor Agent  frontendF6YYWG  PrimaryResult  2023-08-03T18:22:38.2799208Z  1.27.4
-   Azure Monitor Agent  backendYDTYW7   PrimaryResult  2023-08-03T18:22:30.6282239Z  1.18.0.0
-   Azure Monitor Agent  backendRZRPWY   PrimaryResult  2023-08-03T18:22:29.5507687Z  1.18.0.0
+   Azure Monitor Agent  frontend33W1H1  PrimaryResult  2023-08-03T18:23:53.9882669Z  1.36.1
+   Azure Monitor Agent  frontendUZHWTP  PrimaryResult  2023-08-03T18:23:52.5931826Z  1.36.1
+   Azure Monitor Agent  frontendF6YYWG  PrimaryResult  2023-08-03T18:23:38.2812975Z  1.30.1
+   Azure Monitor Agent  backendRZRPWY   PrimaryResult  2023-08-03T18:23:29.5531509Z  1.36.0.0
+   Azure Monitor Agent  frontend33W1H1  PrimaryResult  2023-08-03T18:22:54.0179506Z  1.36.1
+   Azure Monitor Agent  frontendUZHWTP  PrimaryResult  2023-08-03T18:22:52.6105985Z  1.36.1
+   Azure Monitor Agent  frontendF6YYWG  PrimaryResult  2023-08-03T18:22:38.2799208Z  1.36.1
+   Azure Monitor Agent  backendYDTYW7   PrimaryResult  2023-08-03T18:22:30.6282239Z  1.36.0.0
+   Azure Monitor Agent  backendRZRPWY   PrimaryResult  2023-08-03T18:22:29.5507687Z  1.36.0.0
    ...
    ```
 
